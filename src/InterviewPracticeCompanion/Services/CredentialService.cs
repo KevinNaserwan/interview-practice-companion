@@ -33,7 +33,11 @@ public sealed class CredentialService : ICredentialService
         }
     }
 
-    public bool HasApiKey() => ReadCredential(pointer => pointer != IntPtr.Zero);
+    public bool HasApiKey()
+    {
+        try { return ReadCredential(pointer => pointer != IntPtr.Zero); }
+        catch (Exception ex) when (ex is Win32Exception or DllNotFoundException or EntryPointNotFoundException) { return false; }
+    }
 
     public string? GetApiKey() => ReadCredential(pointer =>
     {

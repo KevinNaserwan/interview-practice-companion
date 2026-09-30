@@ -11,12 +11,12 @@ public partial class App : Application
 
     protected override async void OnStartup(StartupEventArgs e)
     {
-        base.OnStartup(e);
         DispatcherUnhandledException += (_, args) =>
         {
-            MessageBox.Show("Unexpected application error. No private session data was logged.", "Interview Practice Companion", MessageBoxButton.OK, MessageBoxImage.Error);
+            ShowStartupError(args.Exception);
             args.Handled = true;
         };
+        base.OnStartup(e);
         try
         {
             var services = new ServiceCollection();
@@ -35,11 +35,23 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "InterviewPracticeCompanion-startup.log");
-            await System.IO.File.WriteAllTextAsync(path, $"{DateTimeOffset.UtcNow:O} {ex.GetType().Name}: {ex.Message}");
-            MessageBox.Show($"Application could not start. Diagnostic saved to:\n{path}", "Interview Practice Companion", MessageBoxButton.OK, MessageBoxImage.Error);
+            ShowStartupError(ex);
             Shutdown(1);
         }
+    }
+    private static void ShowStartupError(Exception exception)
+    {
+        var details = $"{DateTimeOffset.UtcNow:O}{Environment.NewLine}{exception}";
+        string? path = null;
+        try
+        {
+            path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "InterviewPracticeCompanion-startup.log");
+            System.IO.File.WriteAllText(path, details);
+        }
+        catch { }
+        var message = $"Application could not start.{Environment.NewLine}{exception.GetType().Name}: {exception.Message}";
+        if (path is not null) message += $"{Environment.NewLine}{Environment.NewLine}Diagnostic: {path}";
+        MessageBox.Show(message, "Interview Practice Companion", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     protected override async void OnExit(ExitEventArgs e)

@@ -17,13 +17,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private Guid? _sessionId;
     private SessionStatus _status;
     private string _transcript = "", _suggestion = "", _codingPrompt = "", _error = "", _apiKey = "";
+    private bool _hasApiKey;
     private SessionMode _mode;
     private string _programmingLanguage = "Auto";
 
     public MainViewModel(ISessionCoordinator sessions, IMeetsinClient client, ICredentialService credentials, ISettingsService settingsService)
     {
         _sessions = sessions; _client = client; _credentials = credentials; _settingsService = settingsService;
-        StartCommand = new RelayCommand(StartAsync, () => Status == SessionStatus.Idle && _credentials.HasApiKey());
+        StartCommand = new RelayCommand(StartAsync, () => Status == SessionStatus.Idle && _hasApiKey);
         StopCommand = new RelayCommand(StopAsync, () => Status is not SessionStatus.Idle);
         GenerateCommand = new RelayCommand(GenerateAsync, () => Status == SessionStatus.Idle && (Mode == SessionMode.Behavioral ? Transcript.Length > 0 : CodingPrompt.Length > 0));
         CopyCommand = new RelayCommand(CopyAsync, () => Suggestion.Length > 0);
@@ -34,7 +35,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _settingsService.Warning += Warning;
     }
 
-    public async Task InitializeAsync() { _settings = await _settingsService.LoadAsync(); OnChanged(string.Empty); RaiseCommands(); }
+    public async Task InitializeAsync() { _settings = await _settingsService.LoadAsync(); _hasApiKey = _credentials.HasApiKey(); OnChanged(string.Empty); RaiseCommands(); }
     public Language Language { get => _settings.Language; set { _settings.Language = value; OnChanged(); } }
     public CaptureSource CaptureSource { get => _settings.CaptureSource; set { if (_settings.CaptureSource == value) return; _settings.CaptureSource = value; _sessionId = null; OnChanged(); } }
     public bool AlwaysOnTop { get => _settings.AlwaysOnTop; set { _settings.AlwaysOnTop = value; OnChanged(); } }
@@ -47,7 +48,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public string ProgrammingLanguage { get => _programmingLanguage; set { _programmingLanguage = value; OnChanged(); } }
     public string Error { get => _error; private set { _error = value; OnChanged(); } }
     public string ApiKey { get => _apiKey; set { _apiKey = value; OnChanged(); ((RelayCommand)SaveApiKeyCommand).RaiseCanExecuteChanged(); } }
-    public string ApiStatus => _credentials.HasApiKey() ? "API ready" : "API key required";
+    public string ApiStatus => _hasApiKey ? "API ready" : "API key required";
     public Array Languages => Enum.GetValues<Language>();
     public Array Modes => Enum.GetValues<SessionMode>();
     public Array CaptureSources => Enum.GetValues<CaptureSource>();
@@ -81,7 +82,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     }
     private Task CopyAsync() { Clipboard.SetText(Suggestion); return Task.CompletedTask; }
     private Task ClearAsync() { Transcript = ""; Suggestion = ""; CodingPrompt = ""; return Task.CompletedTask; }
-    private Task SaveApiKeyAsync() { _credentials.SetApiKey(ApiKey); ApiKey = ""; OnChanged(nameof(ApiStatus)); RaiseCommands(); return Task.CompletedTask; }
+    private Task SaveApiKeyAsync() { _credentials.SetApiKey(ApiKey); ApiKey = ""; _hasApiKey = true; OnChanged(nameof(ApiStatus)); RaiseCommands(); return Task.CompletedTask; }
     private void TranscriptReceived(object? sender, TranscriptSegment segment) => Application.Current.Dispatcher.Invoke(() => { Transcript = string.Join(Environment.NewLine, new[] { Transcript, segment.Text }.Where(x => x.Length > 0)); Status = SessionStatus.Listening; });
     private void Faulted(object? sender, string message) => Application.Current.Dispatcher.Invoke(() => { Error = message; Status = SessionStatus.Error; });
     private void Warning(object? sender, string message) => Application.Current.Dispatcher.Invoke(() => Error = message);
