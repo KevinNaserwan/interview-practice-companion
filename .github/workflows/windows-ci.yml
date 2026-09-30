@@ -52,15 +52,26 @@ jobs:
           Remove-Item $log -Force -ErrorAction SilentlyContinue
           $process = Start-Process "artifacts\publish\InterviewPracticeCompanion.exe" -PassThru
           Start-Sleep -Seconds 8
+          if (Test-Path $log) {
+            $diagnostic = Get-Content $log -Raw
+            Copy-Item $log "artifacts\startup-diagnostic.log"
+            Write-Host "::error title=WPF startup diagnostic::$($diagnostic -replace "`r?`n", '%0A')"
+            if (!$process.HasExited) { Stop-Process -Id $process.Id -Force }
+            throw "Application wrote a startup diagnostic."
+          }
           if ($process.HasExited) {
-            if (Test-Path $log) { Get-Content $log | Write-Error }
+            Write-Host "::error title=Early application exit::Exit code $($process.ExitCode); no startup diagnostic was written."
             throw "Application exited during startup with code $($process.ExitCode)."
           }
           Stop-Process -Id $process.Id -Force
-          if (Test-Path $log) {
-            Get-Content $log | Write-Error
-            throw "Application wrote a startup diagnostic."
-          }
+      - name: Upload startup diagnostic
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-startup-diagnostic
+          path: artifacts/startup-diagnostic.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload test results
         if: always()
