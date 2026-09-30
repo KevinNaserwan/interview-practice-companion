@@ -1,0 +1,17 @@
+using System.Windows.Input;
+
+namespace InterviewPracticeCompanion.ViewModels;
+
+public sealed class RelayCommand(Func<Task> execute, Func<bool>? canExecute = null) : ICommand
+{
+    private bool _running;
+    public bool CanExecute(object? parameter) => !_running && (canExecute?.Invoke() ?? true);
+    public async void Execute(object? parameter)
+    {
+        if (!CanExecute(parameter)) return;
+        _running = true; RaiseCanExecuteChanged();
+        try { await execute(); } finally { _running = false; RaiseCanExecuteChanged(); }
+    }
+    public event EventHandler? CanExecuteChanged;
+    public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+}
