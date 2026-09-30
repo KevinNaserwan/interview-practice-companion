@@ -78,7 +78,6 @@ public sealed class AudioCaptureService : IAudioCaptureService
             try { _microphone?.StopRecording(); } catch { }
             try { _system?.StopRecording(); } catch { }
             ResetCapture();
-            while (_chunks.Reader.TryRead(out _)) { }
         }
         return Task.CompletedTask;
     }
