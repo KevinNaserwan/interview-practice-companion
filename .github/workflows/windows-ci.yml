@@ -36,7 +36,10 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           dotnet build InterviewPracticeCompanion.sln -c Release --no-restore 2>&1 | Tee-Object artifacts/build.log
-          if ($LASTEXITCODE -ne 0) { throw "Build failed." }
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content artifacts/build.log | Where-Object { $_ -match 'error|failed|exception' } | Select-Object -Last 20 | ForEach-Object { Write-Host "::error file=src/InterviewPracticeCompanion/InterviewPracticeCompanion.csproj::$($_ -replace '%','%25' -replace "`r?`n",'%0A')" }
+            throw "Build failed."
+          }
       - name: Upload build diagnostic
         if: always()
         uses: actions/upload-artifact@v4
