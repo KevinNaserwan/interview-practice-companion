@@ -16,7 +16,6 @@ public sealed partial class MainWindow : Window
 
     public MainWindow(MainViewModel viewModel)
     {
-        InitializeComponent();
         ViewModel = viewModel;
         Content = BuildShell();
         SystemBackdrop = new MicaBackdrop();
