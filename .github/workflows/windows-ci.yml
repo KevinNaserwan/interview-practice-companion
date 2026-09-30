@@ -56,6 +56,23 @@ jobs:
           dotnet publish src/InterviewPracticeCompanion/InterviewPracticeCompanion.csproj
           -c Release -r win-x64 --self-contained true
           -o artifacts/publish
+      - name: Package installer
+        shell: pwsh
+        run: |
+          choco install nsis --yes --no-progress
+          & "C:\Program Files (x86)\NSIS\makensis.exe" installer\InterviewPracticeCompanion.nsi
+          $url = curl.exe -fsS -F "file=@artifacts/InterviewPracticeCompanion-Setup-x64.exe" https://temp.sh/upload
+          Write-Host "::notice title=WinUI installer::$url"
+          Set-Content artifacts/installer-url.txt $url
+      - name: Upload WinUI installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: InterviewPracticeCompanion-WinUI-Setup-x64
+          path: |
+            artifacts/InterviewPracticeCompanion-Setup-x64.exe
+            artifacts/installer-url.txt
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Smoke startup
         shell: pwsh
