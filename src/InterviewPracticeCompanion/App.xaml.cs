@@ -1,23 +1,27 @@
-using System.Windows;
 using InterviewPracticeCompanion.Services;
 using InterviewPracticeCompanion.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Xaml;
 
 namespace InterviewPracticeCompanion;
 
 public partial class App : Application
 {
     private ServiceProvider? _services;
-    private bool _shuttingDown;
+    public static MainWindow? Window { get; private set; }
 
-    protected override async void OnStartup(StartupEventArgs e)
+    public App()
     {
-        DispatcherUnhandledException += (_, args) =>
+        InitializeComponent();
+        UnhandledException += (_, args) =>
         {
-            if (!_shuttingDown) ShowStartupError(args.Exception);
+            WriteDiagnostic(args.Exception);
             args.Handled = true;
         };
-        base.OnStartup(e);
+    }
+
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
+    {
         try
         {
             var services = new ServiceCollection();
@@ -30,37 +34,26 @@ public partial class App : Application
             services.AddSingleton<MainViewModel>();
             services.AddSingleton<MainWindow>();
             _services = services.BuildServiceProvider();
-            var window = _services.GetRequiredService<MainWindow>();
-            await ((MainViewModel)window.DataContext).InitializeAsync();
-            MainWindow = window;
-            window.Show();
+            Window = _services.GetRequiredService<MainWindow>();
+            await Window.ViewModel.InitializeAsync();
+            Window.Activate();
         }
-        catch (Exception ex)
-        {
-            ShowStartupError(ex);
-            Shutdown(1);
-        }
-    }
-    private static void ShowStartupError(Exception exception)
-    {
-        var details = $"{DateTimeOffset.UtcNow:O}{Environment.NewLine}{exception}";
-        string? path = null;
-        try
-        {
-            path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "InterviewPracticeCompanion-startup.log");
-            System.IO.File.WriteAllText(path, details);
-        }
-        catch { }
-        var message = $"Application could not start.{Environment.NewLine}{exception.GetType().Name}: {exception.Message}";
-        if (path is not null) message += $"{Environment.NewLine}{Environment.NewLine}Diagnostic: {path}";
-        MessageBox.Show(message, "Interview Practice Companion", MessageBoxButton.OK, MessageBoxImage.Error);
+        catch (Exception ex) { WriteDiagnostic(ex); }
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    public async Task ShutdownAsync()
     {
-        _shuttingDown = true;
         try { if (_services is not null) await _services.DisposeAsync(); }
         catch { }
-        base.OnExit(e);
+    }
+
+    private static void WriteDiagnostic(Exception exception)
+    {
+        try
+        {
+            var path = Path.Combine(Path.GetTempPath(), "InterviewPracticeCompanion-startup.log");
+            File.WriteAllText(path, $"{DateTimeOffset.UtcNow:O}{Environment.NewLine}{exception}");
+        }
+        catch { }
     }
 }

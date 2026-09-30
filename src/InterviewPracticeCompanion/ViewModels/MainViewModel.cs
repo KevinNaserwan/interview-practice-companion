@@ -2,7 +2,8 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Windows;
+using Microsoft.UI.Dispatching;
+using Windows.ApplicationModel.DataTransfer;
 using InterviewPracticeCompanion.Models;
 using InterviewPracticeCompanion.Services;
 
@@ -17,6 +18,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly ICredentialService _credentials;
     private readonly ISettingsService _settingsService;
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly DispatcherQueue _dispatcher = DispatcherQueue.GetForCurrentThread();
     private CancellationTokenSource? _generation;
     private AppSettings _settings = new();
     private Guid? _sessionId;
@@ -183,7 +185,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         catch (Exception ex) { Error = UserMessage(ex); Status = SessionStatus.Error; }
     }
 
-    private Task CopyAsync() { Clipboard.SetText(Suggestion); return Task.CompletedTask; }
+    private Task CopyAsync() { var package = new DataPackage(); package.SetText(Suggestion); Clipboard.SetContent(package); return Task.CompletedTask; }
     private Task ClearAsync() { Transcript = ""; Suggestion = ""; CodingPrompt = ""; Error = ""; return Task.CompletedTask; }
     private Task OpenApiPortalAsync() { Process.Start(new ProcessStartInfo("https://ai.meetsin.id/login") { UseShellExecute = true }); return Task.CompletedTask; }
     private Task SaveApiKeyAsync()
@@ -205,17 +207,31 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private void AudioLevelChanged(object? sender, float level) => Dispatch(() => AudioLevel = level);
     private void TranscriptionStateChanged(object? sender, bool active) => Dispatch(() => { if (Status != SessionStatus.Error) Status = active ? SessionStatus.Transcribing : SessionStatus.Listening; });
     private void Warning(object? sender, string message) => Dispatch(() => Error = message);
-    private static void Dispatch(Action action) { var dispatcher = Application.Current?.Dispatcher; if (dispatcher is null || dispatcher.CheckAccess()) action(); else dispatcher.BeginInvoke(action); }
+    private void Dispatch(Action action) { if (_dispatcher.HasThreadAccess) action(); else _dispatcher.TryEnqueue(() => action()); }
     private string UserMessage(Exception exception) => exception is DomainException { Code: "consent_required" } ? Resource("ErrorConsentRequired") : exception is ServiceException { Kind: ServiceErrorKind.Unauthorized } ? Resource("ErrorCredential") : exception is ServiceException { Kind: ServiceErrorKind.Timeout } ? Resource("ErrorTimeout") : exception is ServiceException { Kind: ServiceErrorKind.Other } ? Resource("ErrorProviderConfig") : Resource("ErrorGeneric");
     private static string Format(AnswerSuggestion answer) { var text = new StringBuilder(answer.Summary); foreach (var bullet in answer.Bullets.Take(5)) text.Append("\n• ").Append(bullet); if (!string.IsNullOrWhiteSpace(answer.Explanation)) text.Append("\n\n").Append(answer.Explanation); if (!string.IsNullOrWhiteSpace(answer.Code)) text.Append("\n\n").Append(answer.Code); return text.ToString(); }
-    private static string Resource(string key) => Application.Current?.TryFindResource(key)?.ToString() ?? key;
-    private void ApplyLanguageResources(Language language)
+    private string Resource(string key) => (Language, key) switch
     {
-        var dictionaries = Application.Current.Resources.MergedDictionaries;
-        var old = dictionaries.FirstOrDefault(x => x.Source?.OriginalString.Contains("Strings.", StringComparison.OrdinalIgnoreCase) == true);
-        if (old is not null) dictionaries.Remove(old);
-        dictionaries.Add(new ResourceDictionary { Source = new Uri($"Resources/Strings.{(language == Language.Id ? "id" : "en")}.xaml", UriKind.Relative) });
-    }
+        (_, "ModeBehavioral") => Language == Language.Id ? "Perilaku" : "Behavioral",
+        (_, "ModeCoding") => "Coding",
+        (_, "SourceMicrophone") => Language == Language.Id ? "Mikrofon" : "Microphone",
+        (_, "SourceSystem") => Language == Language.Id ? "Audio sistem" : "System audio",
+        (_, "SourceBoth") => Language == Language.Id ? "Mikrofon + sistem" : "Microphone + system",
+        (_, "ApiReady") => Language == Language.Id ? "API siap" : "API connected",
+        (_, "ApiKeyRequired") => Language == Language.Id ? "API opsional" : "Optional API",
+        (_, "ConsentConfirmed") => Language == Language.Id ? "Diizinkan" : "Authorized",
+        (_, "ConsentPending") => Language == Language.Id ? "Belum diizinkan" : "Not authorized",
+        (_, "ErrorConsentRequired") => Language == Language.Id ? "Izinkan perekaman sesi sebelum mulai." : "Authorize this recording session before starting.",
+        (_, "ErrorCredential") => Language == Language.Id ? "Kunci API tidak valid atau kedaluwarsa." : "The API key is invalid or expired.",
+        (_, "ErrorCredentialSave") => Language == Language.Id ? "Kunci API tidak dapat disimpan." : "The API key could not be saved.",
+        (_, "ErrorTimeout") => Language == Language.Id ? "Layanan terlalu lama merespons." : "The service timed out.",
+        (_, "ErrorProviderConfig") => Language == Language.Id ? "Provider AI belum tersedia." : "The AI provider is unavailable.",
+        (_, "ErrorSettingsSave") => Language == Language.Id ? "Pengaturan tidak dapat disimpan." : "Settings could not be saved.",
+        (_, "ErrorGeneric") => Language == Language.Id ? "Operasi gagal. Coba lagi." : "The operation failed. Try again.",
+        (_, var status) when status.StartsWith("Status") => (Language, status) switch { (Language.Id, "StatusIdle") => "Siap", (Language.Id, "StatusListening") => "Mendengarkan", (Language.Id, "StatusTranscribing") => "Mentranskripsi lokal", (Language.Id, "StatusGenerating") => "Menyusun saran", (Language.Id, _) => "Perlu perhatian", (_, "StatusIdle") => "Ready", (_, "StatusListening") => "Listening", (_, "StatusTranscribing") => "Transcribing locally", (_, "StatusGenerating") => "Building suggestion", _ => "Needs attention" },
+        _ => key
+    };
+    private void ApplyLanguageResources(Language language) { }
     private void RefreshOptions()
     {
         ModeOptions = [new(SessionMode.Behavioral, Resource("ModeBehavioral")), new(SessionMode.Coding, Resource("ModeCoding"))];
