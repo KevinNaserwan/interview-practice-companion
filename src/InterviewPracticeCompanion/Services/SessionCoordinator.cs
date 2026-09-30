@@ -10,6 +10,7 @@ public interface ISessionCoordinator : IAsyncDisposable
     Task StartAsync(Guid sessionId, CaptureSource source, Language language, CancellationToken cancellationToken = default);
     Task StopAsync();
     event EventHandler<TranscriptSegment>? TranscriptReceived;
+    event EventHandler<float>? AudioLevelChanged;
     event EventHandler<string>? Faulted;
 }
 
@@ -23,12 +24,14 @@ public sealed class SessionCoordinator : ISessionCoordinator
     private Language _language;
     public Guid? ActiveSessionId { get; private set; }
     public event EventHandler<TranscriptSegment>? TranscriptReceived;
+    public event EventHandler<float>? AudioLevelChanged;
     public event EventHandler<string>? Faulted;
 
     public SessionCoordinator(IAudioCaptureService capture, IMeetsinClient client)
     {
         _capture = capture; _client = client;
         _capture.AudioChunkAvailable += AudioAvailable;
+        _capture.AudioLevelChanged += AudioLevelChangedHandler;
         _capture.CaptureFaulted += CaptureFaulted;
     }
 
@@ -74,7 +77,8 @@ public sealed class SessionCoordinator : ISessionCoordinator
         Faulted?.Invoke(this, message);
         if (message.Contains("disconnected", StringComparison.OrdinalIgnoreCase)) await StopAsync();
     }
+    private void AudioLevelChangedHandler(object? sender, float level) => AudioLevelChanged?.Invoke(this, Math.Clamp(level, 0, 1));
 
     private static string SafeMessage(Exception exception) => exception is ServiceException or DomainException ? exception.Message : "Audio processing failed.";
-    public async ValueTask DisposeAsync() { _capture.AudioChunkAvailable -= AudioAvailable; _capture.CaptureFaulted -= CaptureFaulted; await StopAsync(); _transcription.Dispose(); }
+    public async ValueTask DisposeAsync() { _capture.AudioChunkAvailable -= AudioAvailable; _capture.CaptureFaulted -= CaptureFaulted; _capture.AudioLevelChanged -= AudioLevelChangedHandler; await StopAsync(); _transcription.Dispose(); }
 }

@@ -15,7 +15,7 @@ public interface ICredentialService
 public sealed class CredentialService : ICredentialService
 {
     private const string Target = "InterviewPracticeCompanion/ai.meetsin.id";
-    private const uint Generic = 1, SessionPersistence = 1;
+    private const uint Generic = 1, LocalMachinePersistence = 2;
 
     public void SetApiKey(string apiKey)
     {
@@ -24,7 +24,7 @@ public sealed class CredentialService : ICredentialService
         var blob = Marshal.StringToCoTaskMemUni(apiKey);
         try
         {
-            var credential = new NativeCredential { Type = Generic, TargetName = Target, CredentialBlobSize = bytes, CredentialBlob = blob, Persist = SessionPersistence, UserName = Environment.UserName };
+            var credential = new NativeCredential { Type = Generic, TargetName = Target, CredentialBlobSize = bytes, CredentialBlob = blob, Persist = LocalMachinePersistence, UserName = Environment.UserName };
             if (!CredWriteW(ref credential, 0)) throw new Win32Exception(Marshal.GetLastWin32Error());
         }
         finally

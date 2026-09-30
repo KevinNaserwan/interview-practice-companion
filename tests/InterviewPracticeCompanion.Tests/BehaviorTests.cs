@@ -61,6 +61,20 @@ public sealed class BehaviorTests
         Assert.Equal(12000, limited.Length);
         Assert.EndsWith(latest, limited);
     }
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, true)]
+    public void StartRequiresCredentialAndConsent(bool credential, bool consent, bool expected) =>
+        Assert.Equal(expected, SessionReadiness.CanStart(credential, consent, SessionStatus.Idle));
+
+    [Fact] public void GenerationRequiresCredentialAndModeInput()
+    {
+        Assert.False(SessionReadiness.CanGenerate(false, SessionStatus.Idle, SessionMode.Coding, "", "prompt"));
+        Assert.False(SessionReadiness.CanGenerate(true, SessionStatus.Idle, SessionMode.Coding, "question", ""));
+        Assert.True(SessionReadiness.CanGenerate(true, SessionStatus.Idle, SessionMode.Coding, "", "prompt"));
+    }
 
     private sealed class FakeCapture : IAudioCaptureService
     {

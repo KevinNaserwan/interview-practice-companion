@@ -9,4 +9,5 @@ public partial class SettingsPanel : UserControl
 {
     public SettingsPanel() => InitializeComponent();
     private void Key_Changed(object sender, System.Windows.RoutedEventArgs e) { if (DataContext is MainViewModel vm) vm.ApiKey = Key.Password; }
+    private void Save_Click(object sender, System.Windows.RoutedEventArgs e) => Dispatcher.BeginInvoke(Key.Clear);
 }

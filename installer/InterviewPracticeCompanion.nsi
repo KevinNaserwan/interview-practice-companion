@@ -10,8 +10,8 @@ SetCompressor /SOLID lzma
 BrandingText "Interview Practice Companion"
 
 !define MUI_ABORTWARNING
-!define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
-!define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
+!define MUI_ICON "..\src\InterviewPracticeCompanion\Resources\AppIcon.ico"
+!define MUI_UNICON "..\src\InterviewPracticeCompanion\Resources\AppIcon.ico"
 !define MUI_WELCOMEFINISHPAGE_BITMAP "${NSISDIR}\Contrib\Graphics\Wizard\win.bmp"
 !define MUI_UNWELCOMEFINISHPAGE_BITMAP "${NSISDIR}\Contrib\Graphics\Wizard\win.bmp"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\InterviewPracticeCompanion.exe"
