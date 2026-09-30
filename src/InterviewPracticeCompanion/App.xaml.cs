@@ -12,7 +12,6 @@ public partial class App : Application
 
     public App()
     {
-        InitializeComponent();
         UnhandledException += (_, args) =>
         {
             WriteDiagnostic(args.Exception);
