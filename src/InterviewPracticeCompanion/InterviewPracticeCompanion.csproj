@@ -20,6 +20,7 @@
     <Compile Remove="Models/**/*.cs" />
     <Compile Remove="Services/**/*.cs" />
     <Compile Include="Services/AudioCaptureService.cs" />
+    <Compile Include="Services\WindowsFallbackMeetsinClient.cs" />
     <ProjectReference Include="..\InterviewPracticeCompanion.Core\InterviewPracticeCompanion.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
@@ -31,5 +32,6 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="System.Speech" Version="8.0.0" />
   </ItemGroup>
 </Project>

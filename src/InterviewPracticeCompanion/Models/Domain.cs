@@ -21,7 +21,7 @@ public sealed class AppSettings
 {
     public Language Language { get; set; } = Language.Id;
     public string ApiBaseUrl { get; set; } = "https://ai.meetsin.id/v1";
-    public string Model { get; set; } = "luna-5.6";
+    public string Model { get; set; } = "cx/gpt-5.6-luna";
     public CaptureSource CaptureSource { get; set; } = CaptureSource.Microphone;
     public double Opacity { get; set; } = 0.92;
     public bool AlwaysOnTop { get; set; }
@@ -33,6 +33,7 @@ public sealed class AppSettings
         Language = Enum.IsDefined(Language) ? Language : defaults.Language;
         CaptureSource = Enum.IsDefined(CaptureSource) ? CaptureSource : defaults.CaptureSource;
         Opacity = double.IsFinite(Opacity) && Opacity is >= 0.6 and <= 1.0 ? Opacity : defaults.Opacity;
+        if (Model == "luna-5.6") Model = defaults.Model;
         Model = string.IsNullOrWhiteSpace(Model) ? defaults.Model : Model.Trim();
         if (!Uri.TryCreate(ApiBaseUrl, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
             ApiBaseUrl = defaults.ApiBaseUrl;

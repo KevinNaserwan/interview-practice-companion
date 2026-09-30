@@ -86,6 +86,7 @@ public sealed class MeetsinClient(HttpClient http, ICredentialService credential
         HttpStatusCode.RequestEntityTooLarge => new(ServiceErrorKind.PayloadTooLarge, "Audio payload was too large."),
         HttpStatusCode.TooManyRequests => new(ServiceErrorKind.RateLimited, "API rate limit reached.", retryAfter),
         HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable => new(ServiceErrorKind.Unavailable, "API temporarily unavailable.", retryAfter),
+        HttpStatusCode.BadRequest or HttpStatusCode.NotFound or HttpStatusCode.NotAcceptable => new(ServiceErrorKind.Other, "The configured AI provider or model is unavailable."),
         _ => new(ServiceErrorKind.Other, $"API request failed with HTTP {(int)status}.")
     };
 

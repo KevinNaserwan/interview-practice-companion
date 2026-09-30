@@ -7,7 +7,7 @@ namespace InterviewPracticeCompanion;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
-    private bool _closing;
+    private bool _canClose;
     public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();
@@ -16,10 +16,12 @@ public partial class MainWindow : Window
 
     protected override async void OnClosing(CancelEventArgs e)
     {
-        if (_closing) { base.OnClosing(e); return; }
-        e.Cancel = true; _closing = true;
+        if (_canClose) { base.OnClosing(e); return; }
+        e.Cancel = true;
+        IsEnabled = false;
         try { await _viewModel.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(3)); }
-        catch (TimeoutException) { }
-        Close();
+        catch (Exception ex) when (ex is TimeoutException or OperationCanceledException) { }
+        _canClose = true;
+        await Dispatcher.InvokeAsync(Close);
     }
 }

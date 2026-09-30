@@ -8,12 +8,13 @@ namespace InterviewPracticeCompanion;
 public partial class App : Application
 {
     private ServiceProvider? _services;
+    private bool _shuttingDown;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         DispatcherUnhandledException += (_, args) =>
         {
-            ShowStartupError(args.Exception);
+            if (!_shuttingDown) ShowStartupError(args.Exception);
             args.Handled = true;
         };
         base.OnStartup(e);
@@ -23,7 +24,8 @@ public partial class App : Application
             services.AddSingleton<ISettingsService, SettingsService>();
             services.AddSingleton<ICredentialService, CredentialService>();
             services.AddSingleton<IAudioCaptureService, AudioCaptureService>();
-            services.AddHttpClient<IMeetsinClient, MeetsinClient>();
+            services.AddHttpClient<MeetsinClient>();
+            services.AddSingleton<IMeetsinClient, WindowsFallbackMeetsinClient>();
             services.AddSingleton<ISessionCoordinator, SessionCoordinator>();
             services.AddSingleton<MainViewModel>();
             services.AddSingleton<MainWindow>();
@@ -56,7 +58,9 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
-        if (_services is not null) await _services.DisposeAsync();
+        _shuttingDown = true;
+        try { if (_services is not null) await _services.DisposeAsync(); }
+        catch { }
         base.OnExit(e);
     }
 }

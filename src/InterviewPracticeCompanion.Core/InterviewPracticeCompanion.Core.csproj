@@ -8,6 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../InterviewPracticeCompanion/Models/**/*.cs" Link="Models/%(RecursiveDir)%(Filename)%(Extension)" />
-    <Compile Include="../InterviewPracticeCompanion/Services/**/*.cs" Exclude="../InterviewPracticeCompanion/Services/AudioCaptureService.cs" Link="Services/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../InterviewPracticeCompanion/Services/**/*.cs" Exclude="../InterviewPracticeCompanion/Services/AudioCaptureService.cs;../InterviewPracticeCompanion/Services/WindowsFallbackMeetsinClient.cs" Link="Services/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
