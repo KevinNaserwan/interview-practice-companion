@@ -22,7 +22,8 @@ public sealed class SessionCoordinator : ISessionCoordinator
     private CancellationTokenSource? _sessionCts;
     private readonly SemaphoreSlim _transcription = new(1, 1);
     private readonly object _speechGate = new();
-    private readonly SpeechWindowAccumulator _speech = new(TimeSpan.FromSeconds(3));
+    private readonly SpeechWindowAccumulator _userSpeech = new(TimeSpan.FromSeconds(3));
+    private readonly SpeechWindowAccumulator _otherSpeech = new(TimeSpan.FromSeconds(3));
     private (Guid SessionId, CaptureSource Source)? _consent;
     private Language _language;
     public Guid? ActiveSessionId { get; private set; }
@@ -46,7 +47,7 @@ public sealed class SessionCoordinator : ISessionCoordinator
     {
         if (ActiveSessionId is not null) throw new DomainException("session_already_active", "A practice session is already active.");
         if (!HasConsent(sessionId, source)) throw new DomainException("consent_required", "Consent is required before audio capture.");
-        lock (_speechGate) _speech.Clear();
+        lock (_speechGate) { _userSpeech.Clear(); _otherSpeech.Clear(); }
         ActiveSessionId = sessionId; _language = language;
         _sessionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         try { await _capture.StartAsync(sessionId, source, _sessionCts.Token); }
@@ -58,7 +59,7 @@ public sealed class SessionCoordinator : ISessionCoordinator
         var cts = Interlocked.Exchange(ref _sessionCts, null);
         cts?.Cancel();
         await _capture.StopAsync();
-        lock (_speechGate) _speech.Clear();
+        lock (_speechGate) { _userSpeech.Clear(); _otherSpeech.Clear(); }
         ActiveSessionId = null; _consent = null;
         cts?.Dispose();
     }
@@ -76,13 +77,14 @@ public sealed class SessionCoordinator : ISessionCoordinator
             AudioChunk window;
             lock (_speechGate)
             {
-                if (!_speech.Add(chunk)) return;
-                window = _speech.Drain(chunk.SessionId);
+                var speech = chunk.Speaker == Speaker.User ? _userSpeech : _otherSpeech;
+                if (!speech.Add(chunk)) return;
+                window = speech.Drain(chunk.SessionId);
             }
             TranscriptionStateChanged?.Invoke(this, true);
             var text = await _client.TranscribeAsync(window.Pcm, _language, cts.Token);
             if (text.Length > 0 && ReferenceEquals(cts, _sessionCts) && chunk.SessionId == ActiveSessionId)
-                TranscriptReceived?.Invoke(this, new TranscriptSegment(Guid.NewGuid(), Speaker.Other, text, TimeSpan.Zero, window.Duration));
+                TranscriptReceived?.Invoke(this, new TranscriptSegment(Guid.NewGuid(), chunk.Speaker, text, TimeSpan.Zero, window.Duration));
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)

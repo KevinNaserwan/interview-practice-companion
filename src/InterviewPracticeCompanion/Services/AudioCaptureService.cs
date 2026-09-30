@@ -107,14 +107,16 @@ public sealed class AudioCaptureService : IAudioCaptureService
 
     private void FlushBatch()
     {
-        AudioChunk? chunk = null;
+        AudioChunk? microphone = null, system = null;
         lock (_gate)
         {
-            var mic = Drain(_microphonePcm); var system = Drain(_systemPcm);
-            var pcm = _source == CaptureSource.Both ? AudioMixer.MixPcm16(mic, system) : _source == CaptureSource.Microphone ? mic : system;
-            if (pcm.Length > 0) chunk = new AudioChunk(_sessionId, pcm, TimeSpan.FromSeconds(pcm.Length / 32000d));
+            var mic = Drain(_microphonePcm);
+            var loopback = Drain(_systemPcm);
+            if (mic.Length > 0) microphone = new AudioChunk(_sessionId, mic, TimeSpan.FromSeconds(mic.Length / 32000d), Speaker.User);
+            if (loopback.Length > 0) system = new AudioChunk(_sessionId, loopback, TimeSpan.FromSeconds(loopback.Length / 32000d), Speaker.Other);
         }
-        if (chunk is not null) AudioChunkAvailable?.Invoke(this, chunk);
+        if (microphone is not null) AudioChunkAvailable?.Invoke(this, microphone);
+        if (system is not null) AudioChunkAvailable?.Invoke(this, system);
     }
 
 

@@ -202,7 +202,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void InvalidateConsent() { ConsentChecked = false; ConsentGranted = false; _sessionId = null; }
     private async Task SaveSettingsAsync() { if (!_initialized) return; try { await _settingsService.SaveAsync(_settings, _lifetime.Token); } catch { Error = Resource("ErrorSettingsSave"); } }
-    private void TranscriptReceived(object? sender, TranscriptSegment segment) => Dispatch(() => { Transcript = string.Join(Environment.NewLine, new[] { Transcript, segment.Text }.Where(x => x.Length > 0)); Status = SessionStatus.Listening; });
+    private void TranscriptReceived(object? sender, TranscriptSegment segment) => Dispatch(() =>
+    {
+        var speaker = segment.Speaker == Speaker.User ? (Language == Language.Id ? "Saya" : "Me") : (Language == Language.Id ? "Pewawancara" : "Interviewer");
+        Transcript = string.Join(Environment.NewLine, new[] { Transcript, $"{speaker}: {segment.Text}" }.Where(x => x.Length > 0));
+        Status = SessionStatus.Listening;
+    });
     private void Faulted(object? sender, string message) => Dispatch(() => { Error = string.IsNullOrWhiteSpace(message) ? Resource("ErrorGeneric") : message; Status = SessionStatus.Error; });
     private void AudioLevelChanged(object? sender, float level) => Dispatch(() => AudioLevel = level);
     private void TranscriptionStateChanged(object? sender, bool active) => Dispatch(() => { if (Status != SessionStatus.Error) Status = active ? SessionStatus.Transcribing : SessionStatus.Listening; });

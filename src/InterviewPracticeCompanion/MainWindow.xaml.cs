@@ -69,7 +69,7 @@ public sealed partial class MainWindow : Window
 
         var body = new Grid { Padding = new Thickness(20), RowSpacing = 12 }; body.RowDefinitions.Add(new() { Height = GridLength.Auto }); body.RowDefinitions.Add(new());
         var error = new InfoBar { Severity = InfoBarSeverity.Error, Title = "Perlu perhatian", IsClosable = false, ActionButton = CommandButton("Atur ulang", "RetryCommand") }; Bind(error, InfoBar.IsOpenProperty, "HasError"); Bind(error, InfoBar.MessageProperty, "Error"); body.Children.Add(error);
-        var columns = new Grid { ColumnSpacing = 14 }; columns.ColumnDefinitions.Add(new()); columns.ColumnDefinitions.Add(new()); columns.Children.Add(Card("1. Transkrip", "Audio diproses lokal", "Transcript", false)); var answer = Card("2. Saran jawaban", "Periksa transkrip, lalu tekan Buat saran", "Suggestion", true); Grid.SetColumn(answer, 1); columns.Children.Add(answer); Grid.SetRow(columns, 1); body.Children.Add(columns); Grid.SetRow(body, 2); root.Children.Add(body);
+        var conversation = Card("Percakapan", "Pewawancara, Saya, dan Saran AI dalam satu alur", "Transcript", true); Grid.SetRow(conversation, 1); body.Children.Add(conversation); Grid.SetRow(body, 2); root.Children.Add(body);
         return root;
     }
 
@@ -101,16 +101,17 @@ public sealed partial class MainWindow : Window
 
         var bubbles = new StackPanel { Spacing = 10, Padding = new Thickness(4, 8, 4, 8) };
         var scroll = new ScrollViewer { Content = bubbles, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        if (answer) { _answerBubbles = bubbles; _answerScroll = scroll; } else { _transcriptBubbles = bubbles; _transcriptScroll = scroll; }
+        _transcriptBubbles = _answerBubbles = bubbles; _transcriptScroll = _answerScroll = scroll;
         Grid.SetRow(scroll, contentRow); panel.Children.Add(scroll);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = answer ? HorizontalAlignment.Right : HorizontalAlignment.Left };
         if (answer)
         {
-            buttons.Children.Add(CommandButton("Salin", "CopyCommand"));
+            var edit = new Button { Content = "Edit transkrip" }; edit.Click += EditTranscript_Click; buttons.Children.Add(edit);
+            buttons.Children.Add(CommandButton("Bersihkan", "ClearCommand"));
+            buttons.Children.Add(CommandButton("Salin jawaban", "CopyCommand"));
             var generate = CommandButton("Buat saran", "GenerateCommand"); generate.Style = Application.Current.Resources["AccentButtonStyle"] as Style; buttons.Children.Add(generate);
         }
-        else { var edit = new Button { Content = "Edit transkrip" }; edit.Click += EditTranscript_Click; buttons.Children.Add(edit); buttons.Children.Add(CommandButton("Bersihkan transkrip", "ClearCommand")); }
         Grid.SetRow(buttons, contentRow + 1); panel.Children.Add(buttons);
         var card = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(20), Child = panel };
         _cards.Add(card); return card;
@@ -125,10 +126,32 @@ public sealed partial class MainWindow : Window
 
     private void RenderConversation()
     {
-        RenderBubbles(_transcriptBubbles, ViewModel.Transcript, false, "Percakapan akan muncul di sini…");
-        RenderBubbles(_answerBubbles, ViewModel.Suggestion, true, "Saran terstruktur akan tampil di sini…");
+        if (_transcriptBubbles is null) return;
+        _transcriptBubbles.Children.Clear();
+        if (string.IsNullOrWhiteSpace(ViewModel.Transcript) && string.IsNullOrWhiteSpace(ViewModel.Suggestion))
+            AddBubble(_transcriptBubbles, "Sistem", "Percakapan akan muncul di sini…", false);
+        foreach (var line in ViewModel.Transcript.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separator = line.IndexOf(':');
+            var label = separator > 0 ? line[..separator] : "Pewawancara";
+            var message = separator > 0 ? line[(separator + 1)..].Trim() : line;
+            AddBubble(_transcriptBubbles, label, message, label is "Saya" or "Me");
+        }
+        if (!string.IsNullOrWhiteSpace(ViewModel.Suggestion)) AddBubble(_transcriptBubbles, "AI", ViewModel.Suggestion.Trim(), false, true);
         ScrollToEnd(_transcriptScroll);
-        ScrollToEnd(_answerScroll);
+    }
+
+    private static void AddBubble(StackPanel host, string label, string message, bool mine, bool assistant = false)
+    {
+        var content = new StackPanel { Spacing = 4 };
+        content.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = ThemeBrush("TextFillColorSecondaryBrush") });
+        content.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+        host.Children.Add(new Border
+        {
+            Background = ThemeBrush(assistant ? "AccentFillColorSecondaryBrush" : mine ? "AccentFillColorTertiaryBrush" : "SubtleFillColorSecondaryBrush"),
+            CornerRadius = new CornerRadius(14), Padding = new Thickness(14, 10, 14, 10), MaxWidth = 720,
+            HorizontalAlignment = mine ? HorizontalAlignment.Right : HorizontalAlignment.Left, Child = content
+        });
     }
 
     private static void RenderBubbles(StackPanel? host, string text, bool assistant, string empty)

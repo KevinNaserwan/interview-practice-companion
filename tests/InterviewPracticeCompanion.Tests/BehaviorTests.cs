@@ -65,6 +65,22 @@ public sealed class BehaviorTests
         await coordinator.StopAsync(); await coordinator.StopAsync();
         Assert.Null(coordinator.ActiveSessionId);
     }
+    [Fact] public async Task CoordinatorPreservesAudioSpeakerIdentity()
+    {
+        var capture = new FakeCapture();
+        var coordinator = new SessionCoordinator(capture, new FakeClient("pertanyaan"));
+        var id = Guid.NewGuid();
+        var received = new TaskCompletionSource<TranscriptSegment>(TaskCreationOptions.RunContinuationsAsynchronously);
+        coordinator.TranscriptReceived += (_, segment) => received.TrySetResult(segment);
+        coordinator.GrantConsent(id, CaptureSource.Both);
+        await coordinator.StartAsync(id, CaptureSource.Both, Language.Id);
+        capture.Emit(new AudioChunk(id, new byte[96000], TimeSpan.FromSeconds(3), Speaker.Other));
+        var segment = await received.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(Speaker.Other, segment.Speaker);
+        Assert.Equal("pertanyaan", segment.Text);
+        await coordinator.DisposeAsync();
+    }
+
 
     [Fact] public void TranscriptLimitPreservesNewestQuestion()
     {
@@ -88,17 +104,18 @@ public sealed class BehaviorTests
 
     private sealed class FakeCapture : IAudioCaptureService
     {
-        public event EventHandler<AudioChunk>? AudioChunkAvailable { add { } remove { } }
-        public event EventHandler<float>? AudioLevelChanged { add { } remove { } }
-        public event EventHandler<string>? CaptureFaulted { add { } remove { } }
+        public event EventHandler<AudioChunk>? AudioChunkAvailable;
+        public event EventHandler<float>? AudioLevelChanged;
+        public event EventHandler<string>? CaptureFaulted;
         public Task<IReadOnlyList<AudioDevice>> GetDevicesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<AudioDevice>>([]);
         public Task StartAsync(Guid sessionId, CaptureSource source, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task StopAsync() => Task.CompletedTask;
+        public void Emit(AudioChunk chunk) => AudioChunkAvailable?.Invoke(this, chunk);
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
-    private sealed class FakeClient : IMeetsinClient
+    private sealed class FakeClient(string transcript = "") : IMeetsinClient
     {
-        public Task<string> TranscribeAsync(ReadOnlyMemory<byte> pcm, Language language, CancellationToken cancellationToken) => Task.FromResult("");
+        public Task<string> TranscribeAsync(ReadOnlyMemory<byte> pcm, Language language, CancellationToken cancellationToken) => Task.FromResult(transcript);
         public Task<AnswerSuggestion> GenerateAnswerAsync(GenerateAnswerRequest request, CancellationToken cancellationToken) => Task.FromResult(new AnswerSuggestion("", [], null, null));
     }
 }

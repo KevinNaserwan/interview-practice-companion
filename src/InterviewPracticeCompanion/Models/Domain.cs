@@ -8,7 +8,7 @@ public enum Speaker { Unknown, User, Other }
 
 public sealed record TranscriptSegment(Guid Id, Speaker Speaker, string Text, TimeSpan StartedAt, TimeSpan EndedAt);
 public sealed record AnswerSuggestion(string Summary, IReadOnlyList<string> Bullets, string? Code, string? Explanation);
-public sealed record AudioChunk(Guid SessionId, ReadOnlyMemory<byte> Pcm, TimeSpan Duration);
+public sealed record AudioChunk(Guid SessionId, ReadOnlyMemory<byte> Pcm, TimeSpan Duration, Speaker Speaker = Speaker.Unknown);
 public sealed record AudioDevice(string Id, string Name, CaptureSource Source);
 public sealed record GenerateAnswerRequest(Language Language, SessionMode SessionMode, string Transcript, string? CodingPrompt, string? ProgrammingLanguage);
 public static class SessionReadiness
