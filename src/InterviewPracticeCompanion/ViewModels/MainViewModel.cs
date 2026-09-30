@@ -37,7 +37,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         CopyCommand = new RelayCommand(CopyAsync, () => Suggestion.Length > 0);
         ClearCommand = new RelayCommand(ClearAsync);
         SaveApiKeyCommand = new RelayCommand(SaveApiKeyAsync, () => ApiKey.Length > 0);
-        ConfirmConsentCommand = new RelayCommand(ConfirmConsentAsync, () => ConsentChecked && HasApiKey && !IsSessionActive);
+        ConfirmConsentCommand = new RelayCommand(ConfirmConsentAsync, () => ConsentChecked && !IsSessionActive);
         OpenApiPortalCommand = new RelayCommand(OpenApiPortalAsync);
         SetIndonesianCommand = new RelayCommand(() => SetLanguageAsync(Language.Id));
         SetEnglishCommand = new RelayCommand(() => SetLanguageAsync(Language.En));
@@ -96,7 +96,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public bool ConsentGranted { get => _consentGranted; private set { _consentGranted = value; OnChanged(); OnChanged(nameof(ConsentStatus)); RaiseCommands(); } }
     public string ConsentStatus => Resource(ConsentGranted ? "ConsentConfirmed" : "ConsentPending");
     public float AudioLevel { get => _audioLevel; private set { _audioLevel = value; OnChanged(); } }
-    public bool CanStart => _initialized && SessionReadiness.CanStart(HasApiKey, ConsentGranted, Status);
+    public bool CanStart => _initialized && SessionReadiness.CanStart(ConsentChecked || ConsentGranted, Status);
     public bool CanStop => IsSessionActive || Status == SessionStatus.Error;
     public bool CanGenerate => SessionReadiness.CanGenerate(HasApiKey, Status, Mode, Transcript, CodingPrompt);
     public IReadOnlyList<SelectionOption<SessionMode>> ModeOptions { get; private set; } = [];
@@ -136,7 +136,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private async Task StartAsync()
     {
-        if (!CanStart || _sessionId is null) return;
+        if (!CanStart) return;
+        if (_sessionId is null) { _sessionId = Guid.NewGuid(); _sessions.GrantConsent(_sessionId.Value, CaptureSource); ConsentGranted = true; }
         Error = "";
         try { await _sessions.StartAsync(_sessionId.Value, CaptureSource, Language, _lifetime.Token); Status = SessionStatus.Listening; }
         catch (Exception ex) { Error = UserMessage(ex); Status = SessionStatus.Error; ConsentGranted = false; }

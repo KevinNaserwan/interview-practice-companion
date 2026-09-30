@@ -1,35 +1,56 @@
+using System.Net.Http;
 using System.IO;
-using System.Globalization;
-using System.Speech.Recognition;
 using InterviewPracticeCompanion.Models;
+using Whisper.net;
+using Whisper.net.Ggml;
 
 namespace InterviewPracticeCompanion.Services;
 
-public sealed class WindowsFallbackMeetsinClient(MeetsinClient remote) : IMeetsinClient
+public sealed class WindowsFallbackMeetsinClient(MeetsinClient remote, IHttpClientFactory httpClientFactory) : IMeetsinClient, IAsyncDisposable
 {
+    private readonly SemaphoreSlim _modelLock = new(1, 1);
+    private WhisperFactory? _factory;
+
     public async Task<string> TranscribeAsync(ReadOnlyMemory<byte> pcm, Language language, CancellationToken cancellationToken)
     {
-        try { return await remote.TranscribeAsync(pcm, language, cancellationToken); }
-        catch (ServiceException ex) when (ex.Kind is ServiceErrorKind.Other or ServiceErrorKind.Unavailable or ServiceErrorKind.Timeout or ServiceErrorKind.RateLimited)
-        {
-            return await Task.Run(() => Recognize(pcm, language, cancellationToken), cancellationToken);
-        }
+        var factory = await GetFactoryAsync(cancellationToken);
+        await using var processor = factory.CreateBuilder().WithLanguage(language == Language.Id ? "id" : "en").Build();
+        using var wave = new MemoryStream(CreateWave(pcm.Span), false);
+        var text = new List<string>();
+        await foreach (var segment in processor.ProcessAsync(wave, cancellationToken)) text.Add(segment.Text.Trim());
+        return string.Join(' ', text.Where(x => x.Length > 0));
     }
 
     public Task<AnswerSuggestion> GenerateAnswerAsync(GenerateAnswerRequest request, CancellationToken cancellationToken) =>
         remote.GenerateAnswerAsync(request, cancellationToken);
 
-    private static string Recognize(ReadOnlyMemory<byte> pcm, Language language, CancellationToken cancellationToken)
+    private async Task<WhisperFactory> GetFactoryAsync(CancellationToken cancellationToken)
     {
-        var prefix = language == Language.Id ? "id" : "en";
-        var recognizer = SpeechRecognitionEngine.InstalledRecognizers().FirstOrDefault(x => x.Culture.TwoLetterISOLanguageName.Equals(prefix, StringComparison.OrdinalIgnoreCase))
-            ?? throw new DomainException("speech_language_missing", language == Language.Id ? "Paket bahasa Indonesia Windows Speech belum terpasang." : "The English Windows Speech language pack is not installed.");
-        using var engine = new SpeechRecognitionEngine(recognizer);
-        engine.LoadGrammar(new DictationGrammar());
-        using var wave = new MemoryStream(CreateWave(pcm.Span), false);
-        engine.SetInputToWaveStream(wave);
-        cancellationToken.ThrowIfCancellationRequested();
-        return engine.Recognize(TimeSpan.FromSeconds(10))?.Text?.Trim() ?? string.Empty;
+        if (_factory is not null) return _factory;
+        await _modelLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_factory is not null) return _factory;
+            var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "InterviewPracticeCompanion", "models");
+            var path = Path.Combine(folder, "ggml-base.bin");
+            if (!File.Exists(path))
+            {
+                Directory.CreateDirectory(folder);
+                var temporary = path + ".tmp";
+                using var response = await httpClientFactory.CreateClient().GetAsync("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin", HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                response.EnsureSuccessStatusCode();
+                await using (var source = await response.Content.ReadAsStreamAsync(cancellationToken))
+                await using (var destination = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
+                    await source.CopyToAsync(destination, cancellationToken);
+                File.Move(temporary, path, true);
+            }
+            return _factory = WhisperFactory.FromPath(path);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
+        {
+            throw new DomainException("local_model_unavailable", "Model transkripsi lokal belum tersedia. Hubungkan internet sekali untuk mengunduh model, lalu coba lagi.");
+        }
+        finally { _modelLock.Release(); }
     }
 
     private static byte[] CreateWave(ReadOnlySpan<byte> pcm)
@@ -42,5 +63,11 @@ public sealed class WindowsFallbackMeetsinClient(MeetsinClient remote) : IMeetsi
         BitConverter.GetBytes((short)2).CopyTo(wave, 32); BitConverter.GetBytes((short)16).CopyTo(wave, 34);
         System.Text.Encoding.ASCII.GetBytes("data").CopyTo(wave, 36); BitConverter.GetBytes(pcm.Length).CopyTo(wave, 40); pcm.CopyTo(wave.AsSpan(44));
         return wave;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _factory?.Dispose(); _modelLock.Dispose();
+        return ValueTask.CompletedTask;
     }
 }

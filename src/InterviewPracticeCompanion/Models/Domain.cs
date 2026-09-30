@@ -13,7 +13,7 @@ public sealed record AudioDevice(string Id, string Name, CaptureSource Source);
 public sealed record GenerateAnswerRequest(Language Language, SessionMode SessionMode, string Transcript, string? CodingPrompt, string? ProgrammingLanguage);
 public static class SessionReadiness
 {
-    public static bool CanStart(bool hasCredential, bool hasConsent, SessionStatus status) => hasCredential && hasConsent && status == SessionStatus.Idle;
+    public static bool CanStart(bool hasConsent, SessionStatus status) => hasConsent && status == SessionStatus.Idle;
     public static bool CanGenerate(bool hasCredential, SessionStatus status, SessionMode mode, string transcript, string codingPrompt) => hasCredential && status == SessionStatus.Idle && (mode == SessionMode.Behavioral ? !string.IsNullOrWhiteSpace(transcript) : !string.IsNullOrWhiteSpace(codingPrompt));
 }
 

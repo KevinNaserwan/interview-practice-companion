@@ -74,12 +74,10 @@ public sealed class BehaviorTests
         Assert.EndsWith(latest, limited);
     }
     [Theory]
-    [InlineData(false, false, false)]
-    [InlineData(true, false, false)]
-    [InlineData(false, true, false)]
-    [InlineData(true, true, true)]
-    public void StartRequiresCredentialAndConsent(bool credential, bool consent, bool expected) =>
-        Assert.Equal(expected, SessionReadiness.CanStart(credential, consent, SessionStatus.Idle));
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void StartRequiresSessionConsent(bool consent, bool expected) =>
+        Assert.Equal(expected, SessionReadiness.CanStart(consent, SessionStatus.Idle));
 
     [Fact] public void GenerationRequiresCredentialAndModeInput()
     {
