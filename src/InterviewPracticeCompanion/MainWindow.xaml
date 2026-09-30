@@ -1,64 +1,45 @@
-<Window
-    x:Class="InterviewPracticeCompanion.MainWindow"
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-
-        <Grid x:Name="AppTitleBar" Grid.Row="0" Padding="16,0,12,0">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <Image Source="ms-appx:///Resources/AppLogo.png" Width="24" Height="24"/>
-                <TextBlock Text="Interview Practice" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center"/>
-                <Border Background="{ThemeResource AccentFillColorSecondaryBrush}" CornerRadius="10" Padding="9,3">
-                    <TextBlock Text="LOCAL" FontSize="11" FontWeight="SemiBold"/>
-                </Border>
-            </StackPanel>
-            <Button Grid.Column="1" x:Name="SettingsButton" Style="{StaticResource SubtleButtonStyle}" ToolTipService.ToolTip="Pengaturan" Click="Settings_Click">
-                <FontIcon Glyph="&#xE713;"/>
-            </Button>
-        </Grid>
-
-        <Border Grid.Row="1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,1" Padding="20,12">
-            <Grid ColumnSpacing="12">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="165"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <ComboBox ItemsSource="{Binding ModeOptions}" DisplayMemberPath="Display" SelectedValuePath="Value" SelectedValue="{Binding Mode, Mode=TwoWay}" Header="Mode"/>
-                <ComboBox Grid.Column="1" ItemsSource="{Binding CaptureSourceOptions}" DisplayMemberPath="Display" SelectedValuePath="Value" SelectedValue="{Binding CaptureSource, Mode=TwoWay}" Header="Audio" IsEnabled="{Binding CanEditSetup}"/>
-                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="6">
-                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                    <ProgressBar Value="{Binding AudioLevel}" Minimum="0" Maximum="1" Height="3"/>
-                </StackPanel>
-                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
-                    <CheckBox Content="Sesi ini berizin" IsChecked="{Binding ConsentChecked, Mode=TwoWay}" VerticalAlignment="Center"/>
-                    <Button Content="Mulai" Command="{Binding StartCommand}" Style="{StaticResource AccentButtonStyle}" Padding="20,8"/>
-                    <Button Content="Berhenti" Command="{Binding StopCommand}" Padding="16,8"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <Grid Grid.Row="2" Padding="20" RowSpacing="12">
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-            <InfoBar IsOpen="{Binding HasError}" Severity="Error" Title="Perlu perhatian" Message="{Binding Error}" IsClosable="False">
-                <InfoBar.ActionButton><Button Content="Atur ulang" Command="{Binding RetryCommand}"/></InfoBar.ActionButton>
-            </InfoBar>
-            <Grid Grid.Row="1" ColumnSpacing="14">
-                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                <Border Style="{StaticResource CardStyle}">
-                    <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                        <StackPanel><TextBlock Text="Transkrip" Style="{StaticResource SubtitleTextBlockStyle}"/><TextBlock Text="Diproses lokal di perangkat" Foreground="{ThemeResource MutedBrush}"/></StackPanel>
-                        <TextBox Grid.Row="1" Text="{Binding Transcript, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" PlaceholderText="Percakapan akan muncul di sini…" Padding="14"/>
-                        <Button Grid.Row="2" Content="Bersihkan" Command="{Binding ClearCommand}" Style="{StaticResource SubtleButtonStyle}" HorizontalAlignment="Left"/>
-                    </Grid>
-                </Border>
-                <Border Grid.Column="1" Style="{StaticResource CardStyle}">
-                    <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                        <StackPanel><TextBlock Text="Saran jawaban" Style="{StaticResource SubtitleTextBlockStyle}"/><TextBlock Text="API opsional, hanya saat diminta" Foreground="{ThemeResource MutedBrush}"/></StackPanel>
-                        <TextBox Grid.Row="1" Text="{Binding CodingPrompt, Mode=TwoWay}" PlaceholderText="Soal coding opsional" Margin="0,2,0,0"/>
-                        <TextBox Grid.Row="2" Text="{Binding Suggestion}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" PlaceholderText="Saran terstruktur akan tampil di sini…" Padding="14"/>
-                        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right"><Button Content="Salin" Command="{Binding CopyCommand}"/><Button Content="Buat saran" Command="{Binding GenerateCommand}" Style="{StaticResource AccentButtonStyle}"/></StackPanel>
-                    </Grid>
-                </Border>
-            </Grid>
-        </Grid>
+<Window x:Class="InterviewPracticeCompanion.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid Background="#FFF3F6FA">
+    <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Grid x:Name="AppTitleBar" Padding="16,0,12,0">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+        <Image Source="ms-appx:///Resources/AppLogo.png" Width="24" Height="24"/>
+        <TextBlock Text="Interview Practice" FontWeight="SemiBold" VerticalAlignment="Center"/>
+        <Border Background="#182563EB" CornerRadius="10" Padding="9,3"><TextBlock Text="LOCAL" FontSize="11" FontWeight="SemiBold" Foreground="#FF2563EB"/></Border>
+      </StackPanel>
+      <Button Grid.Column="1" x:Name="SettingsButton" ToolTipService.ToolTip="Pengaturan" Click="Settings_Click"><FontIcon Glyph="&#xE713;"/></Button>
     </Grid>
+    <Border Grid.Row="1" Background="White" BorderBrush="#18000000" BorderThickness="0,1,0,1" Padding="20,12">
+      <Grid ColumnSpacing="12">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="165"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <ComboBox ItemsSource="{Binding ModeOptions}" DisplayMemberPath="Display" SelectedValuePath="Value" SelectedValue="{Binding Mode, Mode=TwoWay}" Header="Mode"/>
+        <ComboBox Grid.Column="1" ItemsSource="{Binding CaptureSourceOptions}" DisplayMemberPath="Display" SelectedValuePath="Value" SelectedValue="{Binding CaptureSource, Mode=TwoWay}" Header="Audio" IsEnabled="{Binding CanEditSetup}"/>
+        <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="6"><TextBlock Text="{Binding StatusText}" FontWeight="SemiBold"/><ProgressBar Value="{Binding AudioLevel}" Minimum="0" Maximum="1" Height="3"/></StackPanel>
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom"><CheckBox Content="Sesi ini berizin" IsChecked="{Binding ConsentChecked, Mode=TwoWay}" VerticalAlignment="Center"/><Button Content="Mulai" Command="{Binding StartCommand}" Padding="20,8"/><Button Content="Berhenti" Command="{Binding StopCommand}" Padding="16,8"/></StackPanel>
+      </Grid>
+    </Border>
+    <Grid Grid.Row="2" Padding="20" RowSpacing="12">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <InfoBar IsOpen="{Binding HasError}" Severity="Error" Title="Perlu perhatian" Message="{Binding Error}" IsClosable="False"><InfoBar.ActionButton><Button Content="Atur ulang" Command="{Binding RetryCommand}"/></InfoBar.ActionButton></InfoBar>
+      <Grid Grid.Row="1" ColumnSpacing="14">
+        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+        <Border Style="{StaticResource CardStyle}">
+          <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <StackPanel><TextBlock Text="Transkrip" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="Diproses lokal di perangkat" Foreground="{StaticResource MutedForeground}"/></StackPanel>
+            <TextBox Grid.Row="1" Text="{Binding Transcript, Mode=TwoWay}" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" PlaceholderText="Percakapan akan muncul di sini…" Padding="14"/>
+            <Button Grid.Row="2" Content="Bersihkan" Command="{Binding ClearCommand}" HorizontalAlignment="Left"/>
+          </Grid>
+        </Border>
+        <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+          <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <StackPanel><TextBlock Text="Saran jawaban" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="API opsional, hanya saat diminta" Foreground="{StaticResource MutedForeground}"/></StackPanel>
+            <TextBox Grid.Row="1" Text="{Binding CodingPrompt, Mode=TwoWay}" PlaceholderText="Soal coding opsional" Margin="0,2,0,0"/>
+            <TextBox Grid.Row="2" Text="{Binding Suggestion}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" PlaceholderText="Saran terstruktur akan tampil di sini…" Padding="14"/>
+            <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right"><Button Content="Salin" Command="{Binding CopyCommand}"/><Button Content="Buat saran" Command="{Binding GenerateCommand}"/></StackPanel>
+          </Grid>
+        </Border>
+      </Grid>
+    </Grid>
+  </Grid>
 </Window>
