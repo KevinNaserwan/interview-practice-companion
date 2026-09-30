@@ -64,6 +64,7 @@ public sealed partial class MainWindow : Window
 
     private Button CommandButton(string content, string command) { var button = new Button { Content = content, Padding = new Thickness(16, 8, 16, 8) }; Bind(button, Button.CommandProperty, command); return button; }
     private static SolidColorBrush Brush(string value) => new(Microsoft.UI.ColorHelper.FromArgb(Convert.ToByte(value[1..3], 16), Convert.ToByte(value[3..5], 16), Convert.ToByte(value[5..7], 16), Convert.ToByte(value[7..9], 16)));
+    private static void Bind(DependencyObject target, DependencyProperty property, string path, BindingMode mode = BindingMode.OneWay) => BindingOperations.SetBinding(target, property, new Binding { Path = new PropertyPath(path), Mode = mode });
 
     private async void Settings_Click(object sender, RoutedEventArgs e)
     {
