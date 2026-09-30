@@ -1,0 +1,133 @@
+name: Signed Windows release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-sign-package:
+    runs-on: windows-2025
+    environment: production-signing
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore InterviewPracticeCompanion.sln
+
+      - name: Build
+        run: dotnet build InterviewPracticeCompanion.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test InterviewPracticeCompanion.sln -c Release --no-build
+
+      - name: Publish self-contained application
+        run: >-
+          dotnet publish src/InterviewPracticeCompanion/InterviewPracticeCompanion.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o artifacts/publish
+
+      - name: Azure login with GitHub OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign application
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\artifacts\publish\InterviewPracticeCompanion.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Interview Practice Companion
+          description-url: https://github.com/KevinNaserwan/interview-practice-companion
+          exclude-environment-credential: true
+          exclude-workload-identity-credential: true
+          exclude-managed-identity-credential: true
+          exclude-shared-token-cache-credential: true
+          exclude-visual-studio-credential: true
+          exclude-visual-studio-code-credential: true
+          exclude-azure-cli-credential: false
+          exclude-azure-powershell-credential: true
+          exclude-azure-developer-cli-credential: true
+          exclude-interactive-browser-credential: true
+
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis --yes --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: '& "C:\Program Files (x86)\NSIS\makensis.exe" installer\InterviewPracticeCompanion.nsi'
+
+      - name: Sign installer
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\artifacts\InterviewPracticeCompanion-Setup-x64.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Interview Practice Companion Installer
+          description-url: https://github.com/KevinNaserwan/interview-practice-companion
+          exclude-environment-credential: true
+          exclude-workload-identity-credential: true
+          exclude-managed-identity-credential: true
+          exclude-shared-token-cache-credential: true
+          exclude-visual-studio-credential: true
+          exclude-visual-studio-code-credential: true
+          exclude-azure-cli-credential: false
+          exclude-azure-powershell-credential: true
+          exclude-azure-developer-cli-credential: true
+          exclude-interactive-browser-credential: true
+
+      - name: Verify Authenticode signatures
+        shell: pwsh
+        run: |
+          $files = @(
+            "artifacts\publish\InterviewPracticeCompanion.exe",
+            "artifacts\InterviewPracticeCompanion-Setup-x64.exe"
+          )
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature $file
+            if ($signature.Status -ne "Valid") {
+              throw "$file signature is $($signature.Status): $($signature.StatusMessage)"
+            }
+          }
+
+      - name: Write SHA-256 checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash artifacts\InterviewPracticeCompanion-Setup-x64.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  InterviewPracticeCompanion-Setup-x64.exe" | Set-Content artifacts\InterviewPracticeCompanion-Setup-x64.exe.sha256
+
+      - name: Upload signed installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: InterviewPracticeCompanion-Setup-x64-signed
+          path: |
+            artifacts/InterviewPracticeCompanion-Setup-x64.exe
+            artifacts/InterviewPracticeCompanion-Setup-x64.exe.sha256
+          if-no-files-found: error
+          retention-days: 30
