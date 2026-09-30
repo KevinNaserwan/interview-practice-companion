@@ -19,8 +19,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         ViewModel = viewModel;
         Content = BuildShell();
-        SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
-        ExtendsContentIntoTitleBar = true;
+        SystemBackdrop = new MicaBackdrop();
         SetTitleBar((UIElement)((Grid)Content).Children[0]);
         Title = "Interview Practice Companion";
         AppWindow.Resize(new SizeInt32(1100, 740));
@@ -59,14 +58,12 @@ public sealed partial class MainWindow : Window
     {
         var panel = new Grid { RowSpacing = 12 }; panel.RowDefinitions.Add(new() { Height = GridLength.Auto }); panel.RowDefinitions.Add(new()); panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
         var heading = new StackPanel(); heading.Children.Add(new TextBlock { Text = title, FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }); heading.Children.Add(new TextBlock { Text = subtitle, Foreground = Brush("#FF64748B") }); panel.Children.Add(heading);
-        var text = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, IsReadOnly = answer, PlaceholderText = answer ? "Saran terstruktur akan tampil di sini…" : "Percakapan akan muncul di sini…", Padding = new Thickness(14) }; Bind(text, TextBox.TextProperty, property, answer ? BindingMode.OneWay : BindingMode.TwoWay); Grid.SetRow(text, 1); panel.Children.Add(text);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = answer ? HorizontalAlignment.Right : HorizontalAlignment.Left }; if (answer) { buttons.Children.Add(CommandButton("Salin", "CopyCommand")); buttons.Children.Add(CommandButton("Buat saran", "GenerateCommand")); } else buttons.Children.Add(CommandButton("Bersihkan", "ClearCommand")); Grid.SetRow(buttons, 2); panel.Children.Add(buttons);
+        var text = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, IsReadOnly = answer, PlaceholderText = answer ? "Saran terstruktur akan tampil di sini…" : "Percakapan akan muncul di sini…", Padding = new Thickness(14) }; ScrollViewer.SetVerticalScrollBarVisibility(text, ScrollBarVisibility.Auto); Bind(text, TextBox.TextProperty, property, answer ? BindingMode.OneWay : BindingMode.TwoWay); Grid.SetRow(text, 1); panel.Children.Add(text);
         return new Border { Background = Brush("#FAFFFFFF"), BorderBrush = Brush("#18000000"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(20), Child = panel };
     }
 
     private Button CommandButton(string content, string command) { var button = new Button { Content = content, Padding = new Thickness(16, 8, 16, 8) }; Bind(button, Button.CommandProperty, command); return button; }
-    private static SolidColorBrush Brush(string value) => new(Windows.UI.ColorHelper.FromArgb(Convert.ToByte(value[1..3], 16), Convert.ToByte(value[3..5], 16), Convert.ToByte(value[5..7], 16), Convert.ToByte(value[7..9], 16)));
-    private static void Bind(DependencyObject target, DependencyProperty property, string path, BindingMode mode = BindingMode.OneWay) => BindingOperations.SetBinding(target, property, new Binding { Path = new PropertyPath(path), Mode = mode });
+    private static SolidColorBrush Brush(string value) => new(Microsoft.UI.ColorHelper.FromArgb(Convert.ToByte(value[1..3], 16), Convert.ToByte(value[3..5], 16), Convert.ToByte(value[5..7], 16), Convert.ToByte(value[7..9], 16)));
 
     private async void Settings_Click(object sender, RoutedEventArgs e)
     {
