@@ -1,0 +1,80 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-smoke:
+    runs-on: windows-2025
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+          cache: true
+          cache-dependency-path: |
+            src/**/*.csproj
+            tests/**/*.csproj
+
+      - name: Restore
+        run: dotnet restore InterviewPracticeCompanion.sln
+
+      - name: Build Release
+        run: dotnet build InterviewPracticeCompanion.sln -c Release --no-restore
+
+      - name: Test full solution
+        run: dotnet test InterviewPracticeCompanion.sln -c Release --no-build --logger "trx;LogFileName=tests.trx"
+
+      - name: Publish self-contained x64
+        run: >-
+          dotnet publish src/InterviewPracticeCompanion/InterviewPracticeCompanion.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o artifacts/publish
+
+      - name: Smoke startup
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:TEMP "InterviewPracticeCompanion-startup.log"
+          Remove-Item $log -Force -ErrorAction SilentlyContinue
+          $process = Start-Process "artifacts\publish\InterviewPracticeCompanion.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($process.HasExited) {
+            if (Test-Path $log) { Get-Content $log | Write-Error }
+            throw "Application exited during startup with code $($process.ExitCode)."
+          }
+          Stop-Process -Id $process.Id -Force
+          if (Test-Path $log) {
+            Get-Content $log | Write-Error
+            throw "Application wrote a startup diagnostic."
+          }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-results
+          path: "**/TestResults/*.trx"
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload unsigned CI build
+        uses: actions/upload-artifact@v4
+        with:
+          name: InterviewPracticeCompanion-win-x64-unsigned
+          path: artifacts/publish/InterviewPracticeCompanion.exe
+          if-no-files-found: error
+          retention-days: 14
