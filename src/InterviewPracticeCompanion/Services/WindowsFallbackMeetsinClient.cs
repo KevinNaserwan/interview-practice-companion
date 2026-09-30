@@ -10,7 +10,7 @@ public sealed class WindowsFallbackMeetsinClient(MeetsinClient remote) : IMeetsi
     public async Task<string> TranscribeAsync(ReadOnlyMemory<byte> pcm, Language language, CancellationToken cancellationToken)
     {
         try { return await remote.TranscribeAsync(pcm, language, cancellationToken); }
-        catch (ServiceException ex) when (ex.Kind == ServiceErrorKind.Other)
+        catch (ServiceException ex) when (ex.Kind is ServiceErrorKind.Other or ServiceErrorKind.Unavailable or ServiceErrorKind.Timeout or ServiceErrorKind.RateLimited)
         {
             return await Task.Run(() => Recognize(pcm, language, cancellationToken), cancellationToken);
         }

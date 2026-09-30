@@ -17,6 +17,24 @@ public static class SessionReadiness
     public static bool CanGenerate(bool hasCredential, SessionStatus status, SessionMode mode, string transcript, string codingPrompt) => hasCredential && status == SessionStatus.Idle && (mode == SessionMode.Behavioral ? !string.IsNullOrWhiteSpace(transcript) : !string.IsNullOrWhiteSpace(codingPrompt));
 }
 
+public sealed class SpeechWindowAccumulator(TimeSpan minimumDuration)
+{
+    private readonly MemoryStream _pcm = new();
+    private TimeSpan _duration;
+    public bool Add(AudioChunk chunk)
+    {
+        _pcm.Write(chunk.Pcm.Span); _duration += chunk.Duration;
+        return _duration >= minimumDuration;
+    }
+    public AudioChunk Drain(Guid sessionId)
+    {
+        var result = new AudioChunk(sessionId, _pcm.ToArray(), _duration);
+        _pcm.SetLength(0); _duration = TimeSpan.Zero;
+        return result;
+    }
+    public void Clear() { _pcm.SetLength(0); _duration = TimeSpan.Zero; }
+}
+
 public sealed class AppSettings
 {
     public Language Language { get; set; } = Language.Id;

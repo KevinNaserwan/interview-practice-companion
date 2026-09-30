@@ -11,6 +11,7 @@ public interface ISessionCoordinator : IAsyncDisposable
     Task StopAsync();
     event EventHandler<TranscriptSegment>? TranscriptReceived;
     event EventHandler<float>? AudioLevelChanged;
+    event EventHandler<bool>? TranscriptionStateChanged;
     event EventHandler<string>? Faulted;
 }
 
@@ -20,11 +21,14 @@ public sealed class SessionCoordinator : ISessionCoordinator
     private readonly IMeetsinClient _client;
     private CancellationTokenSource? _sessionCts;
     private readonly SemaphoreSlim _transcription = new(1, 1);
+    private readonly object _speechGate = new();
+    private readonly SpeechWindowAccumulator _speech = new(TimeSpan.FromSeconds(3));
     private (Guid SessionId, CaptureSource Source)? _consent;
     private Language _language;
     public Guid? ActiveSessionId { get; private set; }
     public event EventHandler<TranscriptSegment>? TranscriptReceived;
     public event EventHandler<float>? AudioLevelChanged;
+    public event EventHandler<bool>? TranscriptionStateChanged;
     public event EventHandler<string>? Faulted;
 
     public SessionCoordinator(IAudioCaptureService capture, IMeetsinClient client)
@@ -53,6 +57,7 @@ public sealed class SessionCoordinator : ISessionCoordinator
         var cts = Interlocked.Exchange(ref _sessionCts, null);
         cts?.Cancel();
         await _capture.StopAsync();
+        lock (_speechGate) _speech.Clear();
         ActiveSessionId = null; _consent = null;
         cts?.Dispose();
     }
@@ -60,16 +65,21 @@ public sealed class SessionCoordinator : ISessionCoordinator
     private async void AudioAvailable(object? sender, AudioChunk chunk)
     {
         var cts = _sessionCts;
-        if (cts is null || chunk.SessionId != ActiveSessionId || !await _transcription.WaitAsync(0, cts.Token)) return;
+        if (cts is null || chunk.SessionId != ActiveSessionId) return;
+        lock (_speechGate) { if (!_speech.Add(chunk)) return; }
+        if (!await _transcription.WaitAsync(0, cts.Token)) return;
+        AudioChunk window;
+        lock (_speechGate) window = _speech.Drain(chunk.SessionId);
+        TranscriptionStateChanged?.Invoke(this, true);
         try
         {
-            var text = await _client.TranscribeAsync(chunk.Pcm, _language, cts.Token);
+            var text = await _client.TranscribeAsync(window.Pcm, _language, cts.Token);
             if (text.Length > 0 && chunk.SessionId == ActiveSessionId)
-                TranscriptReceived?.Invoke(this, new TranscriptSegment(Guid.NewGuid(), Speaker.Other, text, TimeSpan.Zero, chunk.Duration));
+                TranscriptReceived?.Invoke(this, new TranscriptSegment(Guid.NewGuid(), Speaker.Other, text, TimeSpan.Zero, window.Duration));
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { Faulted?.Invoke(this, SafeMessage(ex)); }
-        finally { _transcription.Release(); }
+        finally { TranscriptionStateChanged?.Invoke(this, false); _transcription.Release(); }
     }
 
     private async void CaptureFaulted(object? sender, string message)

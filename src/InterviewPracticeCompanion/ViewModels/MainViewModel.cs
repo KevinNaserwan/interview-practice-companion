@@ -44,6 +44,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         RetryCommand = new RelayCommand(RetryAsync, () => Status == SessionStatus.Error && HasApiKey);
         _sessions.TranscriptReceived += TranscriptReceived;
         _sessions.AudioLevelChanged += AudioLevelChanged;
+        _sessions.TranscriptionStateChanged += TranscriptionStateChanged;
         _sessions.Faulted += Faulted;
         _settingsService.Warning += Warning;
         RefreshOptions();
@@ -199,8 +200,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private void InvalidateConsent() { ConsentChecked = false; ConsentGranted = false; _sessionId = null; }
     private async Task SaveSettingsAsync() { if (!_initialized) return; try { await _settingsService.SaveAsync(_settings, _lifetime.Token); } catch { Error = Resource("ErrorSettingsSave"); } }
     private void TranscriptReceived(object? sender, TranscriptSegment segment) => Dispatch(() => { Transcript = string.Join(Environment.NewLine, new[] { Transcript, segment.Text }.Where(x => x.Length > 0)); Status = SessionStatus.Listening; });
-    private void Faulted(object? sender, string message) => Dispatch(() => { Error = Resource("ErrorGeneric"); Status = SessionStatus.Error; });
+    private void Faulted(object? sender, string message) => Dispatch(() => { Error = string.IsNullOrWhiteSpace(message) ? Resource("ErrorGeneric") : message; Status = SessionStatus.Error; });
     private void AudioLevelChanged(object? sender, float level) => Dispatch(() => AudioLevel = level);
+    private void TranscriptionStateChanged(object? sender, bool active) => Dispatch(() => { if (Status != SessionStatus.Error) Status = active ? SessionStatus.Transcribing : SessionStatus.Listening; });
     private void Warning(object? sender, string message) => Dispatch(() => Error = message);
     private static void Dispatch(Action action) { var dispatcher = Application.Current?.Dispatcher; if (dispatcher is null || dispatcher.CheckAccess()) action(); else dispatcher.BeginInvoke(action); }
     private string UserMessage(Exception exception) => exception is DomainException { Code: "consent_required" } ? Resource("ErrorConsentRequired") : exception is ServiceException { Kind: ServiceErrorKind.Unauthorized } ? Resource("ErrorCredential") : exception is ServiceException { Kind: ServiceErrorKind.Timeout } ? Resource("ErrorTimeout") : exception is ServiceException { Kind: ServiceErrorKind.Other } ? Resource("ErrorProviderConfig") : Resource("ErrorGeneric");
@@ -228,7 +230,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         if (_disposed) return;
         _disposed = true;
         _lifetime.Cancel(); _generation?.Cancel();
-        _sessions.TranscriptReceived -= TranscriptReceived; _sessions.AudioLevelChanged -= AudioLevelChanged; _sessions.Faulted -= Faulted; _settingsService.Warning -= Warning;
+        _sessions.TranscriptReceived -= TranscriptReceived; _sessions.AudioLevelChanged -= AudioLevelChanged; _sessions.TranscriptionStateChanged -= TranscriptionStateChanged; _sessions.Faulted -= Faulted; _settingsService.Warning -= Warning;
         await _sessions.DisposeAsync(); _generation?.Dispose(); _lifetime.Dispose();
     }
 }

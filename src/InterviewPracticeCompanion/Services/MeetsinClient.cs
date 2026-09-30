@@ -67,6 +67,7 @@ public sealed class MeetsinClient(HttpClient http, ICredentialService credential
             HttpResponseMessage response;
             try { response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token); }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { throw new ServiceException(ServiceErrorKind.Timeout, "Request timed out."); }
+            catch (HttpRequestException) { throw new ServiceException(ServiceErrorKind.Unavailable, "Tidak dapat terhubung ke ai.meetsin.id."); }
             if (response.IsSuccessStatusCode) return response;
             var error = MapError(response.StatusCode, response.Headers.RetryAfter?.Delta);
             response.Dispose();

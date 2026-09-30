@@ -25,6 +25,18 @@ public sealed class BehaviorTests
         Assert.True(buffer.TryTake(out var oldest));
         Assert.NotEqual(first.SessionId, oldest!.SessionId);
     }
+    [Fact] public void SpeechWindowWaitsForUsableAudioAndDrainsCleanly()
+    {
+        var id = Guid.NewGuid();
+        var window = new SpeechWindowAccumulator(TimeSpan.FromSeconds(3));
+        Assert.False(window.Add(new AudioChunk(id, new byte[] { 1, 2 }, TimeSpan.FromSeconds(1))));
+        Assert.False(window.Add(new AudioChunk(id, new byte[] { 3, 4 }, TimeSpan.FromSeconds(1))));
+        Assert.True(window.Add(new AudioChunk(id, new byte[] { 5, 6 }, TimeSpan.FromSeconds(1))));
+        var chunk = window.Drain(id);
+        Assert.Equal(new byte[] { 1, 2, 3, 4, 5, 6 }, chunk.Pcm.ToArray());
+        Assert.Equal(TimeSpan.FromSeconds(3), chunk.Duration);
+        Assert.False(window.Add(new AudioChunk(id, new byte[] { 7, 8 }, TimeSpan.FromSeconds(1))));
+    }
 
     [Theory]
     [InlineData("http://ai.meetsin.id/v1", false, "invalid_api_url")]
