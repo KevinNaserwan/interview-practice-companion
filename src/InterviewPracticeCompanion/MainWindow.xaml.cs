@@ -7,6 +7,10 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics;
+using System.ComponentModel;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Graphics.Imaging;
+using Windows.Media.Ocr;
 
 namespace InterviewPracticeCompanion;
 
@@ -16,6 +20,10 @@ public sealed partial class MainWindow : Window
     private Grid? _root;
     private Grid? _commandBar;
     private readonly List<Border> _cards = [];
+    private StackPanel? _transcriptBubbles;
+    private StackPanel? _answerBubbles;
+    private ScrollViewer? _transcriptScroll;
+    private ScrollViewer? _answerScroll;
 
     public MainWindow(MainViewModel viewModel)
     {
@@ -23,12 +31,14 @@ public sealed partial class MainWindow : Window
         Content = _root = BuildShell();
         _root.ActualThemeChanged += (_, _) => ApplyTheme();
         ApplyTheme();
+        ViewModel.PropertyChanged += ViewModelChanged;
+        RenderConversation();
         SystemBackdrop = new MicaBackdrop();
         SetTitleBar((UIElement)((Grid)Content).Children[0]);
         Title = "Interview Practice Companion";
         AppWindow.Resize(new SizeInt32(1100, 740));
         if (AppWindow.Presenter is OverlappedPresenter presenter) { presenter.PreferredMinimumWidth = 820; presenter.PreferredMinimumHeight = 560; }
-        Closed += async (_, _) => { await ViewModel.DisposeAsync(); if (Application.Current is App app) await app.ShutdownAsync(); };
+        Closed += async (_, _) => { ViewModel.PropertyChanged -= ViewModelChanged; await ViewModel.DisposeAsync(); if (Application.Current is App app) await app.ShutdownAsync(); };
     }
 
     private Grid BuildShell()
@@ -63,13 +73,98 @@ public sealed partial class MainWindow : Window
         var panel = new Grid { RowSpacing = 12 };
         panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
         if (answer) panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        panel.RowDefinitions.Add(new()); panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        var heading = new StackPanel(); heading.Children.Add(new TextBlock { Text = title, FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }); heading.Children.Add(new TextBlock { Text = subtitle, Foreground = ThemeBrush("TextFillColorSecondaryBrush") }); panel.Children.Add(heading);
+        panel.RowDefinitions.Add(new());
+        panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        var heading = new StackPanel();
+        heading.Children.Add(new TextBlock { Text = title, FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+        heading.Children.Add(new TextBlock { Text = subtitle, Foreground = ThemeBrush("TextFillColorSecondaryBrush") });
+        panel.Children.Add(heading);
+
         var contentRow = 1;
-        if (answer) { var prompt = new TextBox { Header = "Soal coding (opsional)", PlaceholderText = "Tempel soal coding jika mode Coding dipilih" }; Bind(prompt, TextBox.TextProperty, "CodingPrompt", BindingMode.TwoWay); Grid.SetRow(prompt, 1); panel.Children.Add(prompt); contentRow = 2; }
-        var text = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, IsReadOnly = answer, PlaceholderText = answer ? "Saran terstruktur akan tampil di sini…" : "Percakapan akan muncul di sini…", Padding = new Thickness(14) }; ScrollViewer.SetVerticalScrollBarVisibility(text, ScrollBarVisibility.Auto); Bind(text, TextBox.TextProperty, property, answer ? BindingMode.OneWay : BindingMode.TwoWay); Grid.SetRow(text, contentRow); panel.Children.Add(text);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = answer ? HorizontalAlignment.Right : HorizontalAlignment.Left }; if (answer) { buttons.Children.Add(CommandButton("Salin", "CopyCommand")); var generate = CommandButton("Buat saran", "GenerateCommand"); generate.Style = Application.Current.Resources["AccentButtonStyle"] as Style; buttons.Children.Add(generate); } else buttons.Children.Add(CommandButton("Bersihkan transkrip", "ClearCommand")); Grid.SetRow(buttons, contentRow + 1); panel.Children.Add(buttons);
-        var card = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(20), Child = panel }; _cards.Add(card); return card;
+        if (answer)
+        {
+            var prompt = new TextBox { Header = "Soal coding (opsional)", PlaceholderText = "Tempel teks atau ambil screenshot dengan Win+Shift+S" };
+            Bind(prompt, TextBox.TextProperty, "CodingPrompt", BindingMode.TwoWay);
+            var readScreenshot = new Button { Content = "Baca screenshot", HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
+            readScreenshot.Click += ReadScreenshot_Click;
+            var promptPanel = new StackPanel(); promptPanel.Children.Add(prompt); promptPanel.Children.Add(readScreenshot);
+            Grid.SetRow(promptPanel, 1); panel.Children.Add(promptPanel); contentRow = 2;
+        }
+
+        var bubbles = new StackPanel { Spacing = 10, Padding = new Thickness(4, 8, 4, 8) };
+        var scroll = new ScrollViewer { Content = bubbles, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        if (answer) { _answerBubbles = bubbles; _answerScroll = scroll; } else { _transcriptBubbles = bubbles; _transcriptScroll = scroll; }
+        Grid.SetRow(scroll, contentRow); panel.Children.Add(scroll);
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = answer ? HorizontalAlignment.Right : HorizontalAlignment.Left };
+        if (answer)
+        {
+            buttons.Children.Add(CommandButton("Salin", "CopyCommand"));
+            var generate = CommandButton("Buat saran", "GenerateCommand"); generate.Style = Application.Current.Resources["AccentButtonStyle"] as Style; buttons.Children.Add(generate);
+        }
+        else buttons.Children.Add(CommandButton("Bersihkan transkrip", "ClearCommand"));
+        Grid.SetRow(buttons, contentRow + 1); panel.Children.Add(buttons);
+        var card = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(20), Child = panel };
+        _cards.Add(card); return card;
+    }
+
+    private void ViewModelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(MainViewModel.Transcript) or nameof(MainViewModel.Suggestion)) RenderConversation();
+    }
+
+    private void RenderConversation()
+    {
+        RenderBubbles(_transcriptBubbles, ViewModel.Transcript, false, "Percakapan akan muncul di sini…");
+        RenderBubbles(_answerBubbles, ViewModel.Suggestion, true, "Saran terstruktur akan tampil di sini…");
+        ScrollToEnd(_transcriptScroll);
+        ScrollToEnd(_answerScroll);
+    }
+
+    private static void RenderBubbles(StackPanel? host, string text, bool assistant, string empty)
+    {
+        if (host is null) return;
+        host.Children.Clear();
+        string[] messages = string.IsNullOrWhiteSpace(text) ? [empty] : assistant ? [text.Trim()] : text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var message in messages)
+        {
+            var bubble = new Border
+            {
+                Background = ThemeBrush(assistant ? "AccentFillColorSecondaryBrush" : "SubtleFillColorSecondaryBrush"),
+                CornerRadius = new CornerRadius(14), Padding = new Thickness(14, 10, 14, 10),
+                MaxWidth = 460, HorizontalAlignment = assistant ? HorizontalAlignment.Left : HorizontalAlignment.Right,
+                Child = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true }
+            };
+            host.Children.Add(bubble);
+        }
+    }
+    private void ScrollToEnd(ScrollViewer? scroll)
+    {
+        if (scroll is null) return;
+        DispatcherQueue.TryEnqueue(() => { scroll.UpdateLayout(); scroll.ChangeView(null, scroll.ScrollableHeight, null, false); });
+    }
+
+
+    private async void ReadScreenshot_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var clipboard = Clipboard.GetContent();
+            if (!clipboard.Contains(StandardDataFormats.Bitmap)) throw new InvalidOperationException("Clipboard belum berisi screenshot. Tekan Win+Shift+S terlebih dahulu.");
+            var bitmapReference = await clipboard.GetBitmapAsync();
+            using var stream = await bitmapReference.OpenReadAsync();
+            var decoder = await BitmapDecoder.CreateAsync(stream);
+            using var bitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+            var engine = OcrEngine.TryCreateFromUserProfileLanguages() ?? throw new InvalidOperationException("Bahasa OCR lokal tidak tersedia di Windows.");
+            var result = await engine.RecognizeAsync(bitmap);
+            if (string.IsNullOrWhiteSpace(result.Text)) throw new InvalidOperationException("Tidak ada teks yang terbaca dari screenshot.");
+            ViewModel.CodingPrompt = result.Text;
+        }
+        catch (Exception ex)
+        {
+            var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = "Screenshot tidak dapat dibaca", Content = ex.Message, CloseButtonText = "Tutup" };
+            await dialog.ShowAsync();
+        }
     }
 
     private Button CommandButton(string content, string command) { var button = new Button { Content = content, Padding = new Thickness(16, 8, 16, 8) }; Bind(button, Button.CommandProperty, command); return button; }
