@@ -43,7 +43,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         OpenApiPortalCommand = new RelayCommand(OpenApiPortalAsync);
         SetIndonesianCommand = new RelayCommand(() => SetLanguageAsync(Language.Id));
         SetEnglishCommand = new RelayCommand(() => SetLanguageAsync(Language.En));
-        RetryCommand = new RelayCommand(RetryAsync, () => Status == SessionStatus.Error && HasApiKey);
+        RetryCommand = new RelayCommand(RetryAsync, () => Status == SessionStatus.Error);
         _sessions.TranscriptReceived += TranscriptReceived;
         _sessions.AudioLevelChanged += AudioLevelChanged;
         _sessions.TranscriptionStateChanged += TranscriptionStateChanged;
@@ -94,7 +94,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public string ApiKey { get => _apiKey; set { _apiKey = value; OnChanged(); SaveApiKeyCommand.RaiseCanExecuteChanged(); } }
     public bool HasApiKey => _hasApiKey;
     public string ApiStatus => Resource(_hasApiKey ? "ApiReady" : "ApiKeyRequired");
-    public bool ConsentChecked { get => _consentChecked; set { _consentChecked = value; OnChanged(); ConfirmConsentCommand.RaiseCanExecuteChanged(); } }
+    public bool ConsentChecked { get => _consentChecked; set { if (_consentChecked == value) return; _consentChecked = value; OnChanged(); RaiseCommands(); } }
     public bool ConsentGranted { get => _consentGranted; private set { _consentGranted = value; OnChanged(); OnChanged(nameof(ConsentStatus)); RaiseCommands(); } }
     public string ConsentStatus => Resource(ConsentGranted ? "ConsentConfirmed" : "ConsentPending");
     public float AudioLevel { get => _audioLevel; private set { _audioLevel = value; OnChanged(); } }
@@ -208,7 +208,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private void TranscriptionStateChanged(object? sender, bool active) => Dispatch(() => { if (Status != SessionStatus.Error) Status = active ? SessionStatus.Transcribing : SessionStatus.Listening; });
     private void Warning(object? sender, string message) => Dispatch(() => Error = message);
     private void Dispatch(Action action) { if (_dispatcher.HasThreadAccess) action(); else _dispatcher.TryEnqueue(() => action()); }
-    private string UserMessage(Exception exception) => exception is DomainException { Code: "consent_required" } ? Resource("ErrorConsentRequired") : exception is ServiceException { Kind: ServiceErrorKind.Unauthorized } ? Resource("ErrorCredential") : exception is ServiceException { Kind: ServiceErrorKind.Timeout } ? Resource("ErrorTimeout") : exception is ServiceException { Kind: ServiceErrorKind.Other } ? Resource("ErrorProviderConfig") : Resource("ErrorGeneric");
+    private string UserMessage(Exception exception) => exception switch
+    {
+        DomainException { Code: "consent_required" } => Resource("ErrorConsentRequired"),
+        DomainException { Code: "no_default_device" } => Language == Language.Id ? "Tidak ada perangkat audio yang tersedia." : "No audio device is available.",
+        DomainException { Code: "access_denied" } => Language == Language.Id ? "Akses mikrofon ditolak oleh Windows." : "Windows denied microphone access.",
+        DomainException { Code: "unsupported_format" } => Language == Language.Id ? "Format perangkat audio tidak didukung." : "The audio device format is unsupported.",
+        DomainException { Code: "local_model_unavailable" } => exception.Message,
+        ServiceException { Kind: ServiceErrorKind.Unauthorized } => Resource("ErrorCredential"),
+        ServiceException { Kind: ServiceErrorKind.Timeout } => Resource("ErrorTimeout"),
+        ServiceException { Kind: ServiceErrorKind.Other } => Resource("ErrorProviderConfig"),
+        _ => Resource("ErrorGeneric")
+    };
     private static string Format(AnswerSuggestion answer) { var text = new StringBuilder(answer.Summary); foreach (var bullet in answer.Bullets.Take(5)) text.Append("\n• ").Append(bullet); if (!string.IsNullOrWhiteSpace(answer.Explanation)) text.Append("\n\n").Append(answer.Explanation); if (!string.IsNullOrWhiteSpace(answer.Code)) text.Append("\n\n").Append(answer.Code); return text.ToString(); }
     private string Resource(string key) => (Language, key) switch
     {

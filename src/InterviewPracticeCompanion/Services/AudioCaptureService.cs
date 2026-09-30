@@ -1,5 +1,4 @@
 using System.IO;
-using System.Threading.Channels;
 using InterviewPracticeCompanion.Models;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -17,8 +16,6 @@ public sealed class AudioCaptureService : IAudioCaptureService
     private MemoryStream _microphonePcm = new(), _systemPcm = new();
     private DateTimeOffset _lastSignal;
     private Timer? _batchTimer, _silenceTimer;
-    private bool _warningRaised;
-    private readonly Channel<AudioChunk> _chunks = Channel.CreateBounded<AudioChunk>(new BoundedChannelOptions(20) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
 
     public event EventHandler<AudioChunk>? AudioChunkAvailable;
     public event EventHandler<float>? AudioLevelChanged;
@@ -118,14 +115,7 @@ public sealed class AudioCaptureService : IAudioCaptureService
             var pcm = _source == CaptureSource.Both ? AudioMixer.MixPcm16(mic, system) : _source == CaptureSource.Microphone ? mic : system;
             if (pcm.Length > 0) chunk = new AudioChunk(_sessionId, pcm, TimeSpan.FromSeconds(pcm.Length / 32000d));
         }
-        if (chunk is null) return;
-        if (!_chunks.Writer.TryWrite(chunk))
-        {
-            if (!_warningRaised) CaptureFaulted?.Invoke(this, "Audio processing is falling behind; oldest audio was dropped.");
-            _warningRaised = true;
-        }
-        else _warningRaised = false;
-        AudioChunkAvailable?.Invoke(this, chunk);
+        if (chunk is not null) AudioChunkAvailable?.Invoke(this, chunk);
     }
 
 

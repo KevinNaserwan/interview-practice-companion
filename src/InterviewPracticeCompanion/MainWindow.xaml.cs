@@ -1,6 +1,7 @@
 using InterviewPracticeCompanion.ViewModels;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -24,16 +25,19 @@ public sealed partial class MainWindow : Window
     private StackPanel? _answerBubbles;
     private ScrollViewer? _transcriptScroll;
     private ScrollViewer? _answerScroll;
+    private FrameworkElement? _codingPanel;
 
     public MainWindow(MainViewModel viewModel)
     {
         ViewModel = viewModel;
         Content = _root = BuildShell();
-        _root.ActualThemeChanged += (_, _) => ApplyTheme();
+        _root.ActualThemeChanged += (_, _) => { ApplyTheme(); RenderConversation(); };
         ApplyTheme();
         ViewModel.PropertyChanged += ViewModelChanged;
         RenderConversation();
-        SystemBackdrop = new MicaBackdrop();
+        ApplyWindowSettings();
+        try { SystemBackdrop = new MicaBackdrop(); } catch { }
+        ExtendsContentIntoTitleBar = true;
         SetTitleBar((UIElement)((Grid)Content).Children[0]);
         Title = "Interview Practice Companion";
         AppWindow.Resize(new SizeInt32(1100, 740));
@@ -53,18 +57,19 @@ public sealed partial class MainWindow : Window
         brand.Children.Add(new Border { Background = ThemeBrush("AccentFillColorSecondaryBrush"), CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 3, 9, 3), Child = new TextBlock { Text = "LOCAL", FontSize = 11, Foreground = ThemeBrush("TextOnAccentFillColorPrimaryBrush"), FontWeight = Microsoft.UI.Text.FontWeights.SemiBold } });
         title.Children.Add(brand);
         var settings = new Button { Content = new FontIcon { Glyph = "\uE713" }, VerticalAlignment = VerticalAlignment.Center };
+        ToolTipService.SetToolTip(settings, "Pengaturan"); AutomationProperties.SetName(settings, "Pengaturan");
         settings.Click += Settings_Click; Grid.SetColumn(settings, 1); title.Children.Add(settings); root.Children.Add(title);
 
         var bar = _commandBar = new Grid { Padding = new Thickness(20, 12, 20, 12), ColumnSpacing = 12 };
         bar.ColumnDefinitions.Add(new() { Width = new GridLength(150) }); bar.ColumnDefinitions.Add(new() { Width = new GridLength(165) }); bar.ColumnDefinitions.Add(new()); bar.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var mode = new ComboBox { Header = "Mode", DisplayMemberPath = "Display", SelectedValuePath = "Value" }; Bind(mode, ItemsControl.ItemsSourceProperty, "ModeOptions"); Bind(mode, ComboBox.SelectedValueProperty, "Mode", BindingMode.TwoWay); bar.Children.Add(mode);
         var audio = new ComboBox { Header = "Audio", DisplayMemberPath = "Display", SelectedValuePath = "Value" }; Bind(audio, ItemsControl.ItemsSourceProperty, "CaptureSourceOptions"); Bind(audio, ComboBox.SelectedValueProperty, "CaptureSource", BindingMode.TwoWay); Bind(audio, Control.IsEnabledProperty, "CanEditSetup"); Grid.SetColumn(audio, 1); bar.Children.Add(audio);
-        var state = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center }; var status = new TextBlock { FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }; Bind(status, TextBlock.TextProperty, "StatusText"); var level = new ProgressBar { Minimum = 0, Maximum = 1, Height = 3 }; Bind(level, RangeBase.ValueProperty, "AudioLevel"); state.Children.Add(status); state.Children.Add(level); Grid.SetColumn(state, 2); bar.Children.Add(state);
+        var state = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center }; var status = new TextBlock { FontWeight = Microsoft.UI.Text.FontWeights.SemiBold }; AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite); Bind(status, TextBlock.TextProperty, "StatusText"); var level = new ProgressBar { Minimum = 0, Maximum = 1, Height = 3 }; AutomationProperties.SetName(level, "Level audio"); Bind(level, RangeBase.ValueProperty, "AudioLevel"); state.Children.Add(status); state.Children.Add(level); Grid.SetColumn(state, 2); bar.Children.Add(state);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Bottom }; var consent = new CheckBox { Content = "Saya berizin merekam sesi ini", VerticalAlignment = VerticalAlignment.Center }; Bind(consent, ToggleButton.IsCheckedProperty, "ConsentChecked", BindingMode.TwoWay); actions.Children.Add(consent); var start = CommandButton("Mulai sesi", "StartCommand"); start.Style = Application.Current.Resources["AccentButtonStyle"] as Style; actions.Children.Add(start); actions.Children.Add(CommandButton("Berhenti", "StopCommand")); Grid.SetColumn(actions, 3); bar.Children.Add(actions); Grid.SetRow(bar, 1); root.Children.Add(bar);
 
         var body = new Grid { Padding = new Thickness(20), RowSpacing = 12 }; body.RowDefinitions.Add(new() { Height = GridLength.Auto }); body.RowDefinitions.Add(new());
         var error = new InfoBar { Severity = InfoBarSeverity.Error, Title = "Perlu perhatian", IsClosable = false, ActionButton = CommandButton("Atur ulang", "RetryCommand") }; Bind(error, InfoBar.IsOpenProperty, "HasError"); Bind(error, InfoBar.MessageProperty, "Error"); body.Children.Add(error);
-        var columns = new Grid { ColumnSpacing = 14 }; columns.ColumnDefinitions.Add(new()); columns.ColumnDefinitions.Add(new()); columns.Children.Add(Card("1. Transkrip", "Audio diproses lokal dan dapat diedit", "Transcript", false)); var answer = Card("2. Saran jawaban", "Periksa transkrip, lalu tekan Buat saran", "Suggestion", true); Grid.SetColumn(answer, 1); columns.Children.Add(answer); Grid.SetRow(columns, 1); body.Children.Add(columns); Grid.SetRow(body, 2); root.Children.Add(body);
+        var columns = new Grid { ColumnSpacing = 14 }; columns.ColumnDefinitions.Add(new()); columns.ColumnDefinitions.Add(new()); columns.Children.Add(Card("1. Transkrip", "Audio diproses lokal", "Transcript", false)); var answer = Card("2. Saran jawaban", "Periksa transkrip, lalu tekan Buat saran", "Suggestion", true); Grid.SetColumn(answer, 1); columns.Children.Add(answer); Grid.SetRow(columns, 1); body.Children.Add(columns); Grid.SetRow(body, 2); root.Children.Add(body);
         return root;
     }
 
@@ -85,10 +90,13 @@ public sealed partial class MainWindow : Window
         {
             var prompt = new TextBox { Header = "Soal coding (opsional)", PlaceholderText = "Tempel teks atau ambil screenshot dengan Win+Shift+S" };
             Bind(prompt, TextBox.TextProperty, "CodingPrompt", BindingMode.TwoWay);
+            var language = new ComboBox { Header = "Bahasa pemrograman", ItemsSource = ViewModel.ProgrammingLanguages };
+            Bind(language, ComboBox.SelectedItemProperty, "ProgrammingLanguage", BindingMode.TwoWay);
             var readScreenshot = new Button { Content = "Baca screenshot", HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
             readScreenshot.Click += ReadScreenshot_Click;
-            var promptPanel = new StackPanel(); promptPanel.Children.Add(prompt); promptPanel.Children.Add(readScreenshot);
-            Grid.SetRow(promptPanel, 1); panel.Children.Add(promptPanel); contentRow = 2;
+            _codingPanel = new StackPanel { Spacing = 6 }; ((StackPanel)_codingPanel).Children.Add(prompt); ((StackPanel)_codingPanel).Children.Add(language); ((StackPanel)_codingPanel).Children.Add(readScreenshot);
+            _codingPanel.Visibility = ViewModel.IsCodingMode ? Visibility.Visible : Visibility.Collapsed;
+            Grid.SetRow(_codingPanel, 1); panel.Children.Add(_codingPanel); contentRow = 2;
         }
 
         var bubbles = new StackPanel { Spacing = 10, Padding = new Thickness(4, 8, 4, 8) };
@@ -102,7 +110,7 @@ public sealed partial class MainWindow : Window
             buttons.Children.Add(CommandButton("Salin", "CopyCommand"));
             var generate = CommandButton("Buat saran", "GenerateCommand"); generate.Style = Application.Current.Resources["AccentButtonStyle"] as Style; buttons.Children.Add(generate);
         }
-        else buttons.Children.Add(CommandButton("Bersihkan transkrip", "ClearCommand"));
+        else { var edit = new Button { Content = "Edit transkrip" }; edit.Click += EditTranscript_Click; buttons.Children.Add(edit); buttons.Children.Add(CommandButton("Bersihkan transkrip", "ClearCommand")); }
         Grid.SetRow(buttons, contentRow + 1); panel.Children.Add(buttons);
         var card = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(20), Child = panel };
         _cards.Add(card); return card;
@@ -111,6 +119,8 @@ public sealed partial class MainWindow : Window
     private void ViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(MainViewModel.Transcript) or nameof(MainViewModel.Suggestion)) RenderConversation();
+        if (e.PropertyName == nameof(MainViewModel.IsCodingMode) && _codingPanel is not null) _codingPanel.Visibility = ViewModel.IsCodingMode ? Visibility.Visible : Visibility.Collapsed;
+        if (e.PropertyName is nameof(MainViewModel.AlwaysOnTop) or nameof(MainViewModel.ContentOpacity)) ApplyWindowSettings();
     }
 
     private void RenderConversation()
@@ -167,6 +177,19 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void EditTranscript_Click(object sender, RoutedEventArgs e)
+    {
+        var editor = new TextBox { Text = ViewModel.Transcript, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 260 };
+        var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = "Edit transkrip", Content = editor, PrimaryButtonText = "Simpan", CloseButtonText = "Batal", DefaultButton = ContentDialogButton.Primary };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary) ViewModel.Transcript = editor.Text;
+    }
+
+    private void ApplyWindowSettings()
+    {
+        if (_root is not null) _root.Opacity = ViewModel.ContentOpacity;
+        if (AppWindow.Presenter is OverlappedPresenter presenter) presenter.IsAlwaysOnTop = ViewModel.AlwaysOnTop;
+    }
+
     private Button CommandButton(string content, string command) { var button = new Button { Content = content, Padding = new Thickness(16, 8, 16, 8) }; Bind(button, Button.CommandProperty, command); return button; }
     private static SolidColorBrush ThemeBrush(string key) => (SolidColorBrush)Application.Current.Resources[key];
     private void ApplyTheme()
@@ -182,10 +205,14 @@ public sealed partial class MainWindow : Window
     {
         var apiKey = new PasswordBox { Header = "Kunci API untuk saran AI (opsional)", PlaceholderText = "Disimpan aman di Windows Credential Manager" };
         var language = new ComboBox { Header = "Bahasa", ItemsSource = new[] { "Indonesia", "English" }, SelectedIndex = ViewModel.IsIndonesian ? 0 : 1 };
-        var panel = new StackPanel { Spacing = 16 }; panel.Children.Add(new TextBlock { Text = "Transkripsi selalu lokal. API hanya digunakan ketika Anda menekan Buat saran.", TextWrapping = TextWrapping.Wrap }); panel.Children.Add(language); panel.Children.Add(apiKey);
+        var alwaysOnTop = new CheckBox { Content = "Selalu di atas", IsChecked = ViewModel.AlwaysOnTop };
+        var opacity = new Slider { Header = "Opasitas", Minimum = 0.6, Maximum = 1, StepFrequency = 0.05, Value = ViewModel.ContentOpacity };
+        var panel = new StackPanel { Spacing = 16 }; panel.Children.Add(new TextBlock { Text = "Transkripsi selalu lokal. API hanya digunakan ketika Anda menekan Buat saran.", TextWrapping = TextWrapping.Wrap }); panel.Children.Add(language); panel.Children.Add(alwaysOnTop); panel.Children.Add(opacity); panel.Children.Add(apiKey);
         var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = "Pengaturan", Content = panel, PrimaryButtonText = "Simpan", CloseButtonText = "Batal", DefaultButton = ContentDialogButton.Primary };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
         (language.SelectedIndex == 0 ? ViewModel.SetIndonesianCommand : ViewModel.SetEnglishCommand).Execute(null);
+        ViewModel.AlwaysOnTop = alwaysOnTop.IsChecked == true;
+        ViewModel.ContentOpacity = opacity.Value;
         if (apiKey.Password.Length > 0) { ViewModel.ApiKey = apiKey.Password; ViewModel.SaveApiKeyCommand.Execute(null); }
     }
 }
