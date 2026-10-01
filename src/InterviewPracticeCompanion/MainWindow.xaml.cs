@@ -37,8 +37,6 @@ public sealed partial class MainWindow : Window
         RenderConversation();
         ApplyWindowSettings();
         try { SystemBackdrop = new MicaBackdrop(); } catch { }
-        ExtendsContentIntoTitleBar = true;
-        SetTitleBar((UIElement)((Grid)Content).Children[0]);
         Title = "Interview Practice Companion";
         AppWindow.Resize(new SizeInt32(1100, 740));
         if (AppWindow.Presenter is OverlappedPresenter presenter) { presenter.PreferredMinimumWidth = 820; presenter.PreferredMinimumHeight = 560; }

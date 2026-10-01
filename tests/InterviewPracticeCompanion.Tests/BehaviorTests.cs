@@ -110,6 +110,14 @@ public sealed class BehaviorTests
         Assert.True(SessionReadiness.CanGenerate(true, SessionStatus.Idle, SessionMode.Coding, "", "prompt"));
     }
 
+    [Theory]
+    [InlineData("Ceritakan pengalaman memimpin tim", true)]
+    [InlineData("How do you handle conflict?", true)]
+    [InlineData("Selamat pagi", false)]
+    [InlineData("Thank you", false)]
+    public void DetectsInterviewQuestionsWithoutGreetingHallucinations(string text, bool expected) =>
+        Assert.Equal(expected, SessionReadiness.IsLikelyInterviewQuestion(text));
+
     private static byte[] VoicePcm(int length)
     {
         var pcm = new byte[length];

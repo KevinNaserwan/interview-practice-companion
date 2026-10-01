@@ -14,7 +14,15 @@ public sealed record GenerateAnswerRequest(Language Language, SessionMode Sessio
 public static class SessionReadiness
 {
     public static bool CanStart(bool hasConsent, SessionStatus status) => hasConsent && status == SessionStatus.Idle;
-    public static bool CanGenerate(bool hasCredential, SessionStatus status, SessionMode mode, string transcript, string codingPrompt) => hasCredential && status == SessionStatus.Idle && (mode == SessionMode.Behavioral ? !string.IsNullOrWhiteSpace(transcript) : !string.IsNullOrWhiteSpace(codingPrompt));
+    public static bool CanGenerate(bool hasCredential, SessionStatus status, SessionMode mode, string transcript, string codingPrompt) => hasCredential && status is SessionStatus.Idle or SessionStatus.Listening or SessionStatus.Transcribing && (mode == SessionMode.Behavioral ? !string.IsNullOrWhiteSpace(transcript) : !string.IsNullOrWhiteSpace(codingPrompt));
+    public static bool IsLikelyInterviewQuestion(string text)
+    {
+        var value = text.Trim().ToLowerInvariant();
+        if (value.Length < 5) return false;
+        if (value.EndsWith('?')) return true;
+        string[] prompts = ["apa ", "apakah ", "bagaimana ", "mengapa ", "kenapa ", "siapa ", "kapan ", "di mana ", "berapa ", "jelaskan ", "ceritakan ", "what ", "why ", "how ", "who ", "when ", "where ", "which ", "can you ", "could you ", "would you ", "tell me ", "describe ", "explain "];
+        return prompts.Any(value.StartsWith);
+    }
 }
 
 public sealed class SpeechWindowAccumulator(TimeSpan minimumDuration)

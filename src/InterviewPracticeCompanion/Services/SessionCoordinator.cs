@@ -22,8 +22,8 @@ public sealed class SessionCoordinator : ISessionCoordinator
     private CancellationTokenSource? _sessionCts;
     private readonly SemaphoreSlim _transcription = new(1, 1);
     private readonly object _speechGate = new();
-    private readonly SpeechWindowAccumulator _userSpeech = new(TimeSpan.FromSeconds(3));
-    private readonly SpeechWindowAccumulator _otherSpeech = new(TimeSpan.FromSeconds(3));
+    private readonly SpeechWindowAccumulator _userSpeech = new(TimeSpan.FromSeconds(2));
+    private readonly SpeechWindowAccumulator _otherSpeech = new(TimeSpan.FromSeconds(2));
     private (Guid SessionId, CaptureSource Source)? _consent;
     private Language _language;
     public Guid? ActiveSessionId { get; private set; }

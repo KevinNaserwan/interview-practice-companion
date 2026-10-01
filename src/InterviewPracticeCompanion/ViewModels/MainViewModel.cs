@@ -164,25 +164,35 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         Status = SessionStatus.Idle;
     }
 
-    private async Task GenerateAsync()
+    private Task GenerateAsync() => GenerateAsync(false);
+
+    private async Task GenerateAsync(bool automatic)
     {
         if (!CanGenerate) return;
-        Status = SessionStatus.Generating; Error = "";
+        var keepListening = IsSessionActive;
+        if (!keepListening) Status = SessionStatus.Generating;
+        Error = "";
         _generation?.Cancel(); _generation?.Dispose();
         _generation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        var generation = _generation;
         var expected = _sessionId;
         try
         {
-            var result = await _client.GenerateAnswerAsync(new(Language, Mode, Transcript, CodingPrompt, ProgrammingLanguage), _generation.Token);
-            if (expected == _sessionId && !_generation.IsCancellationRequested) Suggestion = Format(result);
-            Status = SessionStatus.Idle;
+            var result = await _client.GenerateAnswerAsync(new(Language, Mode, Transcript, CodingPrompt, ProgrammingLanguage), generation.Token);
+            if (expected == _sessionId && !generation.IsCancellationRequested) Suggestion = Format(result);
+            if (!keepListening) Status = SessionStatus.Idle;
         }
-        catch (OperationCanceledException) { Status = SessionStatus.Idle; }
+        catch (OperationCanceledException) { if (!keepListening) Status = SessionStatus.Idle; }
         catch (ServiceException ex) when (ex.Kind == ServiceErrorKind.Unauthorized)
         {
-            _hasApiKey = false; OnChanged(nameof(HasApiKey)); OnChanged(nameof(ApiStatus)); Error = Resource("ErrorCredential"); Status = SessionStatus.Error;
+            _hasApiKey = false; OnChanged(nameof(HasApiKey)); OnChanged(nameof(ApiStatus)); Error = Resource("ErrorCredential");
+            if (!keepListening) Status = SessionStatus.Error;
         }
-        catch (Exception ex) { Error = UserMessage(ex); Status = SessionStatus.Error; }
+        catch (Exception ex)
+        {
+            Error = UserMessage(ex);
+            if (!keepListening) Status = SessionStatus.Error;
+        }
     }
 
     private Task CopyAsync() { var package = new DataPackage(); package.SetText(Suggestion); Clipboard.SetContent(package); return Task.CompletedTask; }
@@ -204,9 +214,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private async Task SaveSettingsAsync() { if (!_initialized) return; try { await _settingsService.SaveAsync(_settings, _lifetime.Token); } catch { Error = Resource("ErrorSettingsSave"); } }
     private void TranscriptReceived(object? sender, TranscriptSegment segment) => Dispatch(() =>
     {
-        var speaker = segment.Speaker == Speaker.User ? (Language == Language.Id ? "Saya" : "Me") : (Language == Language.Id ? "Pewawancara" : "Interviewer");
+        var interviewer = segment.Speaker != Speaker.User;
+        var speaker = interviewer ? (Language == Language.Id ? "Pewawancara" : "Interviewer") : (Language == Language.Id ? "Saya" : "Me");
         Transcript = string.Join(Environment.NewLine, new[] { Transcript, $"{speaker}: {segment.Text}" }.Where(x => x.Length > 0));
         Status = SessionStatus.Listening;
+        if (interviewer && HasApiKey && Mode == SessionMode.Behavioral && SessionReadiness.IsLikelyInterviewQuestion(segment.Text)) _ = GenerateAsync(true);
     });
     private void Faulted(object? sender, string message) => Dispatch(() => { Error = string.IsNullOrWhiteSpace(message) ? Resource("ErrorGeneric") : message; Status = SessionStatus.Error; });
     private void AudioLevelChanged(object? sender, float level) => Dispatch(() => AudioLevel = level);
