@@ -56,21 +56,19 @@ jobs:
           dotnet publish src/InterviewPracticeCompanion/InterviewPracticeCompanion.csproj
           -c Release -r win-x64 --self-contained true
           -o artifacts/publish
-      - name: Package installer
+      - name: Package portable app
         shell: pwsh
         run: |
-          choco install nsis --yes --no-progress
-          & "C:\Program Files (x86)\NSIS\makensis.exe" installer\InterviewPracticeCompanion.nsi
-          $url = curl.exe -fsS -F "file=@artifacts/InterviewPracticeCompanion-Setup-x64.exe" https://temp.sh/upload
-          Write-Host "::notice title=WinUI installer::$url"
-          Set-Content artifacts/installer-url.txt $url
-      - name: Upload WinUI installer
+          Compress-Archive -Path artifacts\publish\* -DestinationPath artifacts\InterviewPracticeCompanion-portable-win-x64.zip -CompressionLevel Optimal
+          $hash = (Get-FileHash artifacts\InterviewPracticeCompanion-portable-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  InterviewPracticeCompanion-portable-win-x64.zip" | Set-Content artifacts\InterviewPracticeCompanion-portable-win-x64.zip.sha256
+      - name: Upload portable app
         uses: actions/upload-artifact@v4
         with:
-          name: InterviewPracticeCompanion-WinUI-Setup-x64
+          name: InterviewPracticeCompanion-portable-win-x64
           path: |
-            artifacts/InterviewPracticeCompanion-Setup-x64.exe
-            artifacts/installer-url.txt
+            artifacts/InterviewPracticeCompanion-portable-win-x64.zip
+            artifacts/InterviewPracticeCompanion-portable-win-x64.zip.sha256
           if-no-files-found: error
           retention-days: 14
 
@@ -111,10 +109,3 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload unsigned CI build
-        uses: actions/upload-artifact@v4
-        with:
-          name: InterviewPracticeCompanion-win-x64-unsigned
-          path: artifacts/publish/InterviewPracticeCompanion.exe
-          if-no-files-found: error
-          retention-days: 14
