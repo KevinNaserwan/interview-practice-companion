@@ -67,20 +67,17 @@ public sealed class SessionCoordinator : ISessionCoordinator
     private async void AudioAvailable(object? sender, AudioChunk chunk)
     {
         var cts = _sessionCts;
-        if (cts is null || chunk.SessionId != ActiveSessionId) return;
-        var entered = false;
+        if (cts is null || chunk.SessionId != ActiveSessionId || !AudioSignal.ContainsSpeech(chunk.Pcm.Span)) return;
+        AudioChunk window;
+        lock (_speechGate)
+        {
+            var speech = chunk.Speaker == Speaker.User ? _userSpeech : _otherSpeech;
+            if (!speech.Add(chunk) || !_transcription.Wait(0)) return;
+            window = speech.Drain(chunk.SessionId);
+        }
         try
         {
-            await _transcription.WaitAsync(cts.Token);
-            entered = true;
             if (!ReferenceEquals(cts, _sessionCts) || chunk.SessionId != ActiveSessionId) return;
-            AudioChunk window;
-            lock (_speechGate)
-            {
-                var speech = chunk.Speaker == Speaker.User ? _userSpeech : _otherSpeech;
-                if (!speech.Add(chunk)) return;
-                window = speech.Drain(chunk.SessionId);
-            }
             TranscriptionStateChanged?.Invoke(this, true);
             var text = await _client.TranscribeAsync(window.Pcm, _language, cts.Token);
             if (text.Length > 0 && ReferenceEquals(cts, _sessionCts) && chunk.SessionId == ActiveSessionId)
@@ -94,7 +91,7 @@ public sealed class SessionCoordinator : ISessionCoordinator
         finally
         {
             if (ReferenceEquals(cts, _sessionCts)) TranscriptionStateChanged?.Invoke(this, false);
-            if (entered) _transcription.Release();
+            _transcription.Release();
         }
     }
 

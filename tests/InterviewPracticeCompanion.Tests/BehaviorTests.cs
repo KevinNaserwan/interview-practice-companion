@@ -38,6 +38,14 @@ public sealed class BehaviorTests
         Assert.False(window.Add(new AudioChunk(id, new byte[] { 7, 8 }, TimeSpan.FromSeconds(1))));
     }
 
+    [Fact] public void SpeechGateRejectsSilenceAndAcceptsVoiceLevelSignal()
+    {
+        Assert.False(AudioSignal.ContainsSpeech(new byte[32000]));
+        var speech = new byte[32000];
+        for (var i = 0; i < speech.Length; i += 2) BitConverter.TryWriteBytes(speech.AsSpan(i, 2), (short)(i % 4 == 0 ? 1800 : -1800));
+        Assert.True(AudioSignal.ContainsSpeech(speech));
+    }
+
     [Theory]
     [InlineData("http://ai.meetsin.id/v1", false, "invalid_api_url")]
     [InlineData("https://example.com/v1", false, "custom_host_unacknowledged")]
@@ -74,7 +82,7 @@ public sealed class BehaviorTests
         coordinator.TranscriptReceived += (_, segment) => received.TrySetResult(segment);
         coordinator.GrantConsent(id, CaptureSource.Both);
         await coordinator.StartAsync(id, CaptureSource.Both, Language.Id);
-        capture.Emit(new AudioChunk(id, new byte[96000], TimeSpan.FromSeconds(3), Speaker.Other));
+        capture.Emit(new AudioChunk(id, VoicePcm(96000), TimeSpan.FromSeconds(3), Speaker.Other));
         var segment = await received.Task.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.Equal(Speaker.Other, segment.Speaker);
         Assert.Equal("pertanyaan", segment.Text);
@@ -100,6 +108,13 @@ public sealed class BehaviorTests
         Assert.False(SessionReadiness.CanGenerate(false, SessionStatus.Idle, SessionMode.Coding, "", "prompt"));
         Assert.False(SessionReadiness.CanGenerate(true, SessionStatus.Idle, SessionMode.Coding, "question", ""));
         Assert.True(SessionReadiness.CanGenerate(true, SessionStatus.Idle, SessionMode.Coding, "", "prompt"));
+    }
+
+    private static byte[] VoicePcm(int length)
+    {
+        var pcm = new byte[length];
+        for (var i = 0; i < pcm.Length; i += 2) BitConverter.TryWriteBytes(pcm.AsSpan(i, 2), (short)(i % 4 == 0 ? 1800 : -1800));
+        return pcm;
     }
 
     private sealed class FakeCapture : IAudioCaptureService
