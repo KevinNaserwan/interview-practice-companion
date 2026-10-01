@@ -11,6 +11,8 @@ using Windows.Graphics;
 using System.ComponentModel;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics.Imaging;
+using System.Diagnostics;
+using Windows.Storage.Pickers;
 using Windows.Media.Ocr;
 
 namespace InterviewPracticeCompanion;
@@ -26,6 +28,7 @@ public sealed partial class MainWindow : Window
     private ScrollViewer? _transcriptScroll;
     private ScrollViewer? _answerScroll;
     private FrameworkElement? _codingPanel;
+    private TextBlock? _screenImportStatus;
 
     public MainWindow(MainViewModel viewModel)
     {
@@ -86,14 +89,18 @@ public sealed partial class MainWindow : Window
         var contentRow = 1;
         if (answer)
         {
-            var prompt = new TextBox { Header = "Soal coding (opsional)", PlaceholderText = "Tempel teks atau ambil screenshot dengan Win+Shift+S" };
+            var prompt = new TextBox { Header = "Teks soal dari layar", PlaceholderText = "Ambil area layar, baca clipboard, atau impor gambar" };
             Bind(prompt, TextBox.TextProperty, "CodingPrompt", BindingMode.TwoWay);
+            var kind = new ComboBox { Header = "Jenis soal", ItemsSource = ViewModel.QuestionKinds, SelectedItem = ViewModel.QuestionKind };
+            Bind(kind, ComboBox.SelectedItemProperty, "QuestionKind", BindingMode.TwoWay);
             var language = new ComboBox { Header = "Bahasa pemrograman", ItemsSource = ViewModel.ProgrammingLanguages };
             Bind(language, ComboBox.SelectedItemProperty, "ProgrammingLanguage", BindingMode.TwoWay);
-            var readScreenshot = new Button { Content = "Baca screenshot", HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 0, 0) };
-            readScreenshot.Click += ReadScreenshot_Click;
-            _codingPanel = new StackPanel { Spacing = 6 }; ((StackPanel)_codingPanel).Children.Add(prompt); ((StackPanel)_codingPanel).Children.Add(language); ((StackPanel)_codingPanel).Children.Add(readScreenshot);
-            _codingPanel.Visibility = ViewModel.IsCodingMode ? Visibility.Visible : Visibility.Collapsed;
+            _screenImportStatus = new TextBlock { Text = "Siap membaca satu gambar — tidak merekam layar", Foreground = ThemeBrush("TextFillColorSecondaryBrush"), TextWrapping = TextWrapping.Wrap };
+            var capture = new Button { Content = "Ambil area layar" }; capture.Click += CaptureScreen_Click;
+            var readScreenshot = new Button { Content = "Baca clipboard" }; readScreenshot.Click += ReadScreenshot_Click;
+            var import = new Button { Content = "Impor gambar" }; import.Click += ImportImage_Click;
+            var imports = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 }; imports.Children.Add(capture); imports.Children.Add(readScreenshot); imports.Children.Add(import);
+            _codingPanel = new StackPanel { Spacing = 6 }; ((StackPanel)_codingPanel).Children.Add(prompt); ((StackPanel)_codingPanel).Children.Add(kind); ((StackPanel)_codingPanel).Children.Add(language); ((StackPanel)_codingPanel).Children.Add(_screenImportStatus); ((StackPanel)_codingPanel).Children.Add(imports);
             Grid.SetRow(_codingPanel, 1); panel.Children.Add(_codingPanel); contentRow = 2;
         }
 
@@ -118,7 +125,7 @@ public sealed partial class MainWindow : Window
     private void ViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(MainViewModel.Transcript) or nameof(MainViewModel.Suggestion)) RenderConversation();
-        if (e.PropertyName == nameof(MainViewModel.IsCodingMode) && _codingPanel is not null) _codingPanel.Visibility = ViewModel.IsCodingMode ? Visibility.Visible : Visibility.Collapsed;
+        if (e.PropertyName == nameof(MainViewModel.IsCodingMode) && _codingPanel is not null) _codingPanel.Visibility = Visibility.Visible;
         if (e.PropertyName is nameof(MainViewModel.AlwaysOnTop) or nameof(MainViewModel.ContentOpacity)) ApplyWindowSettings();
     }
 
@@ -176,26 +183,58 @@ public sealed partial class MainWindow : Window
     }
 
 
+    private void CaptureScreen_Click(object sender, RoutedEventArgs e)
+    {
+        _screenImportStatus!.Text = "Windows membuka pemilih area. Setelah selesai, kembali lalu tekan Baca clipboard.";
+        Process.Start(new ProcessStartInfo("ms-screenclip:") { UseShellExecute = true });
+    }
+
     private async void ReadScreenshot_Click(object sender, RoutedEventArgs e)
     {
         try
         {
+            _screenImportStatus!.Text = "Screenshot sedang dibaca…";
             var clipboard = Clipboard.GetContent();
-            if (!clipboard.Contains(StandardDataFormats.Bitmap)) throw new InvalidOperationException("Clipboard belum berisi screenshot. Tekan Win+Shift+S terlebih dahulu.");
+            if (!clipboard.Contains(StandardDataFormats.Bitmap)) throw new InvalidOperationException("Clipboard belum berisi screenshot. Tekan Ambil area layar terlebih dahulu.");
             var bitmapReference = await clipboard.GetBitmapAsync();
             using var stream = await bitmapReference.OpenReadAsync();
-            var decoder = await BitmapDecoder.CreateAsync(stream);
-            using var bitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
-            var engine = OcrEngine.TryCreateFromUserProfileLanguages() ?? throw new InvalidOperationException("Bahasa OCR lokal tidak tersedia di Windows.");
-            var result = await engine.RecognizeAsync(bitmap);
-            if (string.IsNullOrWhiteSpace(result.Text)) throw new InvalidOperationException("Tidak ada teks yang terbaca dari screenshot.");
-            ViewModel.CodingPrompt = result.Text;
+            await ReadQuestionAsync(stream);
         }
-        catch (Exception ex)
+        catch (Exception ex) { await ShowScreenImportErrorAsync(ex); }
+    }
+
+    private async void ImportImage_Click(object sender, RoutedEventArgs e)
+    {
+        try
         {
-            var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = "Screenshot tidak dapat dibaca", Content = ex.Message, CloseButtonText = "Tutup" };
-            await dialog.ShowAsync();
+            var picker = new FileOpenPicker();
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            picker.FileTypeFilter.Add(".png"); picker.FileTypeFilter.Add(".jpg"); picker.FileTypeFilter.Add(".jpeg"); picker.FileTypeFilter.Add(".bmp");
+            var file = await picker.PickSingleFileAsync();
+            if (file is null) return;
+            _screenImportStatus!.Text = "Gambar sedang dibaca…";
+            using var stream = await file.OpenReadAsync();
+            await ReadQuestionAsync(stream);
         }
+        catch (Exception ex) { await ShowScreenImportErrorAsync(ex); }
+    }
+
+    private async Task ReadQuestionAsync(Windows.Storage.Streams.IRandomAccessStream stream)
+    {
+        var decoder = await BitmapDecoder.CreateAsync(stream);
+        using var bitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+        var engine = OcrEngine.TryCreateFromUserProfileLanguages() ?? throw new InvalidOperationException("Bahasa OCR lokal tidak tersedia di Windows.");
+        var result = await engine.RecognizeAsync(bitmap);
+        if (string.IsNullOrWhiteSpace(result.Text)) throw new InvalidOperationException("Tidak ada teks yang terbaca dari gambar.");
+        ViewModel.CodingPrompt = result.Text;
+        _screenImportStatus!.Text = "Screenshot selesai dibaca. Periksa teks, pilih jenis soal, lalu tekan Buat saran.";
+    }
+
+    private async Task ShowScreenImportErrorAsync(Exception exception)
+    {
+        if (_screenImportStatus is not null) _screenImportStatus.Text = "Screenshot gagal dibaca";
+        var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = "Screenshot tidak dapat dibaca", Content = exception.Message, CloseButtonText = "Tutup" };
+        await dialog.ShowAsync();
     }
 
     private async void EditTranscript_Click(object sender, RoutedEventArgs e)

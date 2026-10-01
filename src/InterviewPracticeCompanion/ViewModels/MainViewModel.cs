@@ -26,6 +26,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private SessionMode _mode;
     private string _transcript = "", _suggestion = "", _codingPrompt = "", _error = "", _apiKey = "";
     private string _programmingLanguage = "Auto";
+    private QuestionKind _questionKind;
     private bool _hasApiKey, _consentChecked, _consentGranted, _initialized;
     private float _audioLevel;
     private bool _disposed;
@@ -89,6 +90,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public string Suggestion { get => _suggestion; private set { _suggestion = value; OnChanged(); RaiseCommands(); } }
     public string CodingPrompt { get => _codingPrompt; set { _codingPrompt = value; OnChanged(); RaiseCommands(); } }
     public string ProgrammingLanguage { get => _programmingLanguage; set { _programmingLanguage = value; OnChanged(); } }
+    public QuestionKind QuestionKind { get => _questionKind; set { if (_questionKind == value) return; _questionKind = value; OnChanged(); } }
     public string Error { get => _error; private set { _error = value; OnChanged(); OnChanged(nameof(HasError)); } }
     public bool HasError => Error.Length > 0;
     public string ApiKey { get => _apiKey; set { _apiKey = value; OnChanged(); SaveApiKeyCommand.RaiseCanExecuteChanged(); } }
@@ -104,6 +106,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public IReadOnlyList<SelectionOption<SessionMode>> ModeOptions { get; private set; } = [];
     public IReadOnlyList<SelectionOption<CaptureSource>> CaptureSourceOptions { get; private set; } = [];
     public string[] ProgrammingLanguages { get; } = ["Auto", "JavaScript", "TypeScript", "Python", "Java", "Go", "Rust"];
+    public QuestionKind[] QuestionKinds { get; } = Enum.GetValues<QuestionKind>();
 
     public RelayCommand StartCommand { get; }
     public RelayCommand StopCommand { get; }
@@ -178,7 +181,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         var expected = _sessionId;
         try
         {
-            var result = await _client.GenerateAnswerAsync(new(Language, Mode, Transcript, CodingPrompt, ProgrammingLanguage), generation.Token);
+            var result = await _client.GenerateAnswerAsync(new(Language, Mode, Transcript, CodingPrompt, ProgrammingLanguage, QuestionKind), generation.Token);
             if (expected == _sessionId && !generation.IsCancellationRequested) Suggestion = Format(result);
             if (!keepListening) Status = SessionStatus.Idle;
         }

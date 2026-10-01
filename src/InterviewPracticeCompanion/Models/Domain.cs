@@ -5,16 +5,17 @@ public enum SessionMode { Behavioral, Coding }
 public enum SessionStatus { Idle, Listening, Transcribing, Generating, Error }
 public enum CaptureSource { Microphone, System, Both }
 public enum Speaker { Unknown, User, Other }
+public enum QuestionKind { Auto, Coding, MultipleChoice, Essay }
 
 public sealed record TranscriptSegment(Guid Id, Speaker Speaker, string Text, TimeSpan StartedAt, TimeSpan EndedAt);
 public sealed record AnswerSuggestion(string Summary, IReadOnlyList<string> Bullets, string? Code, string? Explanation);
 public sealed record AudioChunk(Guid SessionId, ReadOnlyMemory<byte> Pcm, TimeSpan Duration, Speaker Speaker = Speaker.Unknown);
 public sealed record AudioDevice(string Id, string Name, CaptureSource Source);
-public sealed record GenerateAnswerRequest(Language Language, SessionMode SessionMode, string Transcript, string? CodingPrompt, string? ProgrammingLanguage);
+public sealed record GenerateAnswerRequest(Language Language, SessionMode SessionMode, string Transcript, string? CodingPrompt, string? ProgrammingLanguage, QuestionKind QuestionKind = QuestionKind.Auto);
 public static class SessionReadiness
 {
     public static bool CanStart(bool hasConsent, SessionStatus status) => hasConsent && status == SessionStatus.Idle;
-    public static bool CanGenerate(bool hasCredential, SessionStatus status, SessionMode mode, string transcript, string codingPrompt) => hasCredential && status is SessionStatus.Idle or SessionStatus.Listening or SessionStatus.Transcribing && (mode == SessionMode.Behavioral ? !string.IsNullOrWhiteSpace(transcript) : !string.IsNullOrWhiteSpace(codingPrompt));
+    public static bool CanGenerate(bool hasCredential, SessionStatus status, SessionMode mode, string transcript, string codingPrompt) => hasCredential && status is SessionStatus.Idle or SessionStatus.Listening or SessionStatus.Transcribing && (!string.IsNullOrWhiteSpace(codingPrompt) || mode == SessionMode.Behavioral && !string.IsNullOrWhiteSpace(transcript));
     public static bool IsLikelyInterviewQuestion(string text)
     {
         var value = text.Trim().ToLowerInvariant();
